@@ -1,0 +1,82 @@
+project:
+  name: ece338-gpgpu
+
+architecture:
+  num_cores: 32
+  num_warps: 1
+
+host_interface:
+  address_gpio: "0x41200000"
+  cmd_gpio: "0x41210000"
+  rdata_gpio: "0x41220000"
+  status_gpio: "0x41230000"
+  wdata_gpio: "0x41240000"
+
+hardware:
+  fpga:
+    part: xc7z020clg484-1
+    board_part: xilinx.com:zc702:part0:1.4
+  vivado:
+    project_name: gpgpu_vivado
+    bd_name: gpgpu_system
+    top: gpgpu_system_wrapper
+    version: "2025.2"
+    jobs: 32
+
+software:
+  riscv:
+    march: rv32im
+    abi: ilp32
+
+serial:
+  port: /dev/ttyACM0
+  baud: 115200
+
+paths:
+  config: config
+  build: build
+  hardware:
+    root: hardware
+    rtl: hardware/rtl
+    vivado: hardware/vivado
+    reports: build/hardware/reports
+    bitstream: build/hardware/bitstream
+  software:
+    root: software
+    host: software/host
+    programs: software/programs
+  tests:
+    root: tests
+    rtl: tests/hardware/rtl
+    tools: tests/tools
+  demo: demo
+
+# Commands are names or paths. Machine-specific paths belong in config/local.yaml.
+tools:
+  git:
+    command: git
+    required: true
+  python:
+    command: python3
+    required: true
+  make:
+    command: make
+    required: true
+  native_cc:
+    command: gcc
+    required: true
+  riscv_gcc:
+    command: riscv64-unknown-elf-gcc
+    required: true
+  iverilog:
+    command: iverilog
+    required: true
+  vvp:
+    command: vvp
+    required: true
+  vivado:
+    command: vivado
+    required: false
+  gtkwave:
+    command: gtkwave
+    required: false

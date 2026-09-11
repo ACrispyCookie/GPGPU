@@ -16,7 +16,12 @@
 
 # Python/local environments
 venv/
+.venv/
 __pycache__/
+*.py[cod]
+
+# Machine-local GPGPU overrides
+/config/local.yaml
 
 # Project-local notes not intended for publication
 SSOT.md

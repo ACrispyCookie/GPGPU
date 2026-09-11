@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CLI_PROJECT="$ROOT/tools/gpgpu_cli"
+VENV="$ROOT/.venv"
+
+bootstrap() {
+    printf 'Running first-time initialization...\n'
+    if command -v uv >/dev/null 2>&1; then
+        UV_PROJECT_ENVIRONMENT="$VENV" uv sync --project "$CLI_PROJECT"
+    else
+        python3 -m venv "$VENV"
+        "$VENV/bin/python" -m pip install --editable "$CLI_PROJECT"
+    fi
+
+    if [[ ! -e "$ROOT/config/local.yaml" ]]; then
+        printf '{}\n' > "$ROOT/config/local.yaml"
+    fi
+
+    "$VENV/bin/gpgpu" doctor
+    printf 'Activate .venv to have access to GPGPU CLI from anywhere inside the repo\n'
+    exit 0
+}
+
+if [[ ! -x "$VENV/bin/gpgpu" ]]; then
+    bootstrap
+fi
+
+exec "$VENV/bin/gpgpu" "$@"

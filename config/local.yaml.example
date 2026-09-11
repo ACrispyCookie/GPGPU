@@ -1,0 +1,10 @@
+# Machine-local values override the selected profile.
+# The ./gpgpu launcher creates config/local.yaml automatically on first use.
+#
+# Example:
+# serial:
+#   port: /dev/ttyUSB1
+# tools:
+#   vivado:
+#     command: /opt/Xilinx/Vivado/2025.2/bin/vivado
+{}
