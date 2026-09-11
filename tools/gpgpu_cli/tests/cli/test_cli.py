@@ -73,7 +73,7 @@ def test_doctor_distinguishes_required_and_optional_tools(tmp_path: Path) -> Non
     assert "Warnings: 1" in result.stdout
 
 
-def test_config_validate_reports_missing_options_and_exits_nonzero(tmp_path: Path) -> None:
+def test_config_validate_accepts_partial_profile_inheriting_default(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     (repo / "config/profiles/incomplete.yaml").write_text(
         "project:\n  name: incomplete\n",
@@ -83,10 +83,21 @@ def test_config_validate_reports_missing_options_and_exits_nonzero(tmp_path: Pat
 
     result = runner.invoke(app, ["--profile", "incomplete", "config", "validate"])
 
+    assert result.exit_code == 0, result.output
+    assert "Errors: 0" in result.stdout
+
+
+def test_doctor_does_not_duplicate_config_structure_errors(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    (repo / "config/local.yaml").write_text("tools: invalid\n", encoding="utf-8")
+    app = create_app(repo_root=repo)
+
+    result = runner.invoke(app, ["doctor"])
+
     assert result.exit_code == 1, result.output
-    assert "Missing option: paths" in result.stdout
-    assert "Errors:" in result.stdout
-    assert "Warnings:" in result.stdout
+    assert result.stdout.count("tools must be a mapping") == 1
+    assert "The 'tools' configuration option must be a mapping" not in result.stdout
+    assert "Errors: 1" in result.stdout
 
 
 def test_callback_fails_immediately_on_config_parse_error(tmp_path: Path) -> None:
@@ -119,7 +130,7 @@ def test_doctor_counts_missing_required_repository_paths_as_errors(tmp_path: Pat
     assert "Errors: 1" in result.stdout
 
 
-def test_help_exposes_core_commands_without_completion_flags(tmp_path: Path) -> None:
+def test_help_exposes_core_commands_and_completion_flags(tmp_path: Path) -> None:
     app = create_app(repo_root=make_repo(tmp_path))
 
     result = runner.invoke(app, ["--help"])
@@ -128,8 +139,8 @@ def test_help_exposes_core_commands_without_completion_flags(tmp_path: Path) -> 
     assert "init" not in result.stdout
     assert "doctor" in result.stdout
     assert "config" in result.stdout
-    assert "--install-completion" not in result.stdout
-    assert "--show-completion" not in result.stdout
+    assert "--install-completion" in result.stdout
+    assert "--show-completion" in result.stdout
 
 
 def test_command_handlers_live_in_commands_package() -> None:

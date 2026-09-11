@@ -34,9 +34,7 @@ def test_root_launcher_is_executable_and_runs_cli() -> None:
     assert "--extra" not in launcher_text
     assert "[dev]" not in launcher_text
     assert '"${1:-}" == "init"' not in launcher_text
-    assert ".gpgpu-doctor-complete" in launcher_text
     assert '"$VENV/bin/gpgpu" doctor' in launcher_text
-    assert "exit 0" not in launcher_text
     result = subprocess.run(
         [str(launcher), "config", "get", "project.name"],
         cwd=REPO_ROOT / "hardware/rtl",

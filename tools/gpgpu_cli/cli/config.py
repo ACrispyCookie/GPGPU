@@ -244,20 +244,28 @@ def resolve_config(
     overrides: Iterable[str] = (),
     allow_new_keys: bool = False,
 ) -> ResolvedConfig:
-    """Resolve profile, local, and CLI layers in increasing precedence."""
+    """Resolve default, selected profile, local, and CLI layers by precedence."""
 
     if not _PROFILE_NAME.fullmatch(profile):
         raise ConfigError(f"Invalid profile name: {profile!r}")
 
     root = Path(repo_root).resolve()
+    default_path = root / "config" / "profiles" / "default.yaml"
     profile_path = root / "config" / "profiles" / f"{profile}.yaml"
     local_path = root / "config" / "local.yaml"
-    profile_values = _load_yaml(profile_path, required=True)
+    default_values = _load_yaml(default_path, required=True)
+    profile_values = (
+        default_values if profile == "default" else _load_yaml(profile_path, required=True)
+    )
     local_values = _load_yaml(local_path, required=False)
 
     merged: dict[str, Any] = {}
     provenance: dict[str, str] = {}
-    for values, source_path in ((profile_values, profile_path), (local_values, local_path)):
+    layers = [(default_values, default_path)]
+    if profile != "default":
+        layers.append((profile_values, profile_path))
+    layers.append((local_values, local_path))
+    for values, source_path in layers:
         _merge(merged, values)
         _record_sources(values, str(source_path), "", provenance)
 

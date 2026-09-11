@@ -101,7 +101,7 @@ def test_repo_path_resolves_relative_paths_against_repository(tmp_path: Path) ->
     assert resolved.repo_path("paths.build") == (tmp_path / "build").resolve()
 
 
-def test_validation_reports_options_missing_from_selected_profile(tmp_path: Path) -> None:
+def test_selected_profile_inherits_default_options_before_cli_overrides(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     write_yaml(
         repo / "config/profiles/incomplete.yaml",
@@ -115,11 +115,22 @@ tools:
 """,
     )
 
-    report = validate_config(resolve_config(repo, profile="incomplete"))
+    resolved = resolve_config(
+        repo,
+        profile="incomplete",
+        overrides=["paths.build=custom-build"],
+    )
+    report = validate_config(resolved)
 
-    assert not report.valid
-    assert any("paths" in error and "missing" in error.lower() for error in report.errors)
-    assert any("nested" in error and "missing" in error.lower() for error in report.errors)
+    assert resolved.get("architecture.cores") == 16
+    assert resolved.get("nested.keep") == "profile"
+    assert resolved.get("paths.build") == "custom-build"
+    assert resolved.source_of("nested.keep").endswith("config/profiles/default.yaml")
+    assert resolved.source_of("architecture.cores").endswith(
+        "config/profiles/incomplete.yaml"
+    )
+    assert resolved.source_of("paths.build") == "cli"
+    assert report.valid
 
 
 def test_validation_warns_about_options_not_declared_by_default_profile(tmp_path: Path) -> None:

@@ -43,16 +43,13 @@ def doctor(ctx: typer.Context) -> None:
 
     tools = config.get("tools", {})
     if not hasattr(tools, "items"):
-        errors.append("The 'tools' configuration option must be a mapping")
         tools = {}
     for name, specification in tools.items():
         if not hasattr(specification, "get"):
-            errors.append(f"Tool {name!r} must be a mapping")
             continue
         command = specification.get("command")
-        required = bool(specification.get("required", False))
-        if not isinstance(command, str):
-            errors.append(f"tools.{name}.command must be a string")
+        required = specification.get("required", False)
+        if not isinstance(command, str) or not isinstance(required, bool):
             continue
 
         configured = Path(command).expanduser()
