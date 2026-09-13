@@ -21,7 +21,7 @@ gpgpu = "cli.cli:main"
 dev = ["pytest>=8,<9"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["cli"]
+packages = ["cli", "config"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests/cli"]

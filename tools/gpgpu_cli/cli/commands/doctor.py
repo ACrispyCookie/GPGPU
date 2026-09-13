@@ -9,7 +9,7 @@ from rich.console import Console
 from rich.table import Table
 import typer
 
-from ..config import ConfigError, ResolvedConfig, validate_config
+from config import ConfigError, ResolvedConfig, validate_config
 from .common import display_path, print_summary
 
 

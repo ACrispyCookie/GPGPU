@@ -8,8 +8,7 @@ import typer
 
 from .commands.config import app as config_app
 from .commands.doctor import doctor
-from .config import ConfigError, resolve_config
-from .paths import RepoNotFoundError, find_repo_root
+from config import ConfigError, RepoNotFoundError, find_repo_root, resolve_config
 
 
 def create_app(*, repo_root: str | Path | None = None) -> typer.Typer:

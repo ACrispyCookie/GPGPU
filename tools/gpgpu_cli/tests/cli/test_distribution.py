@@ -11,6 +11,14 @@ REPO_ROOT = Path(__file__).resolve().parents[4]
 CLI_PROJECT = REPO_ROOT / "tools/gpgpu_cli"
 
 
+def test_configuration_modules_live_in_config_package() -> None:
+    assert (CLI_PROJECT / "config/__init__.py").is_file()
+    assert (CLI_PROJECT / "config/config.py").is_file()
+    assert (CLI_PROJECT / "config/paths.py").is_file()
+    assert not (CLI_PROJECT / "cli/config.py").exists()
+    assert not (CLI_PROJECT / "cli/paths.py").exists()
+
+
 def test_repository_has_default_profile_and_local_override_template() -> None:
     profile_path = REPO_ROOT / "config/profiles/default.yaml"
     template_path = REPO_ROOT / "config/local.yaml.example"

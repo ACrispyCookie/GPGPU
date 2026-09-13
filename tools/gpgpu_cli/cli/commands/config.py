@@ -9,7 +9,7 @@ from rich.console import Console
 import typer
 import yaml
 
-from ..config import ConfigError, ResolvedConfig, validate_config
+from config import ConfigError, ResolvedConfig, validate_config
 from .common import display_path, plain, print_summary
 
 

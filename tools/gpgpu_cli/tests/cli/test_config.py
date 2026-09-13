@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-from cli.config import ConfigError, resolve_config, validate_config
+from config import ConfigError, resolve_config, validate_config
 
 
 def write_yaml(path: Path, text: str) -> None:
