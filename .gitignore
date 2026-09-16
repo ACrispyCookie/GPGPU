@@ -19,6 +19,10 @@ venv/
 .venv/
 __pycache__/
 *.py[cod]
+.pytest_cache/
+
+# pydoit dependency database
+.doit.db*
 
 # Machine-local GPGPU overrides
 /config/local.yaml

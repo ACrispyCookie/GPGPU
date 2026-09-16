@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "ece338-gpgpu"
+name = "gpgpu-cli"
 version = "0.1.0"
 description = "GPGPU project control-plane CLI"
 requires-python = ">=3.11"
