@@ -11,6 +11,8 @@ import re
 
 import yaml
 
+from .paths import PathResolutionError, resolve_repo_path, resolve_repo_paths
+
 
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 _MISSING = object()
@@ -139,13 +141,20 @@ class ResolvedConfig:
             raise ConfigError(f"No source recorded for configuration option: {dotted_key}") from exc
 
     def repo_path(self, dotted_key: str) -> Path:
-        """Resolve a configured path relative to the repository root."""
+        """Return one recursively resolved entry from the ``paths`` section."""
 
-        raw = self.get(dotted_key)
-        if not isinstance(raw, str):
-            raise ConfigError(f"Configuration option {dotted_key!r} must be a path string")
-        path = Path(raw).expanduser()
-        return (path if path.is_absolute() else self.repo_root / path).resolve()
+        try:
+            return resolve_repo_path(self.repo_root, self.get("paths"), dotted_key)
+        except PathResolutionError as exc:
+            raise ConfigError(str(exc)) from exc
+
+    def repo_paths(self) -> Mapping[str, Path]:
+        """Resolve every path, accumulating each containing section's root."""
+
+        try:
+            return resolve_repo_paths(self.repo_root, self.get("paths"))
+        except PathResolutionError as exc:
+            raise ConfigError(str(exc)) from exc
 
     def to_dict(self) -> dict[str, Any]:
         """Return a mutable copy suitable for serialization."""

@@ -13,6 +13,10 @@ from config import ConfigError, ResolvedConfig, validate_config
 from .common import display_path, print_summary
 
 
+def _is_generated_path(key: str, generated_roots: tuple[str, ...]) -> bool:
+    return any(key == root or key.startswith(f"{root}.") for root in generated_roots)
+
+
 def doctor(ctx: typer.Context) -> None:
     """Check configured tools and repository paths."""
 
@@ -70,22 +74,29 @@ def doctor(ctx: typer.Context) -> None:
             status = "[yellow]MISSING (optional)[/yellow]"
         table.add_row(str(name), command, status)
 
-    path_keys = (
-        "paths.build",
-        "paths.hardware.rtl",
-        "paths.software.programs",
-        "paths.tests.rtl",
+    configured_generated_paths = config.get("doctor.generated_paths", ())
+    generated_paths = (
+        tuple(item for item in configured_generated_paths if isinstance(item, str))
+        if isinstance(configured_generated_paths, tuple)
+        else ()
     )
-    for key in path_keys:
-        try:
-            path = config.repo_path(key)
-        except ConfigError:
-            continue
-        exists = path.exists() or key == "paths.build"
-        status = "[green]OK[/green]" if exists else "[red]MISSING[/red]"
-        if not exists:
-            errors.append(f"Repository path is missing: {key} ({path})")
-        table.add_row(key, display_path(str(path), config.repo_root), status)
+
+    try:
+        configured_paths = config.repo_paths()
+    except ConfigError as exc:
+        errors.append(str(exc))
+    else:
+        for key, path in configured_paths.items():
+            exists = path.exists()
+            generated = _is_generated_path(key, generated_paths)
+            if exists:
+                status = "[green]OK[/green]"
+            elif generated:
+                status = "[blue]NOT BUILT[/blue]"
+            else:
+                status = "[red]MISSING[/red]"
+                errors.append(f"Repository path is missing: {key} ({path})")
+            table.add_row(key, display_path(str(path), config.repo_root), status)
 
     console.print(table)
     print_summary(console, errors, warnings)

@@ -57,6 +57,10 @@ paths:
     root: tests
   demo: demo
 
+doctor:
+  generated_paths:
+    - paths.build
+
 # Commands are names or paths. Machine-specific paths belong in config/local.yaml.
 tools:
   git:
