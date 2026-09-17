@@ -34,21 +34,27 @@ serial:
 
 paths:
   config: config
-  build: build
+  build:
+    root: build
+    hardware:
+      root: hardware
+      vivado: vivado
+      reports: reports
+      bitstream: bistream
+    software:
+      root: software
+      programs:
+        root: programs
+        elf: elf
   hardware:
     root: hardware
-    rtl: hardware/rtl
-    vivado: hardware/vivado
-    reports: build/hardware/reports
-    bitstream: build/hardware/bitstream
+    rtl: rtl
   software:
     root: software
-    host: software/host
-    programs: software/programs
+    host: host
+    programs: programs
   tests:
     root: tests
-    rtl: tests/hardware/rtl
-    tools: tests/tools
   demo: demo
 
 # Commands are names or paths. Machine-specific paths belong in config/local.yaml.

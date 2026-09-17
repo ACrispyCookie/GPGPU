@@ -8,6 +8,7 @@ import typer
 
 from .commands.config import app as config_app
 from .commands.doctor import doctor
+from .commands.run import run
 from config import ConfigError, RepoNotFoundError, find_repo_root, resolve_config
 
 
@@ -23,6 +24,7 @@ def create_app(*, repo_root: str | Path | None = None) -> typer.Typer:
     )
     app.add_typer(config_app, name="config")
     app.command()(doctor)
+    app.command()(run)
 
     def root() -> Path:
         return Path(repo_root).resolve() if repo_root is not None else find_repo_root()

@@ -3,8 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
 from typer.testing import CliRunner
 
+import cli.commands.run as run_command_module
 from cli.cli import create_app
 
 
@@ -130,6 +132,38 @@ def test_doctor_counts_missing_required_repository_paths_as_errors(tmp_path: Pat
     assert "Errors: 1" in result.stdout
 
 
+def test_run_dispatches_exactly_one_task_with_resolved_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_repo(tmp_path)
+    captured: dict[str, object] = {}
+
+    def fake_run(config: object, arguments: list[str]) -> int:
+        captured["config"] = config
+        captured["arguments"] = arguments
+        return 0
+
+    monkeypatch.setattr(run_command_module, "run_doit", fake_run)
+    result = runner.invoke(
+        create_app(repo_root=repo),
+        ["run", "software:programs:simple:x86"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert captured["arguments"] == ["run", "software:programs:simple:x86"]
+    assert captured["config"].profile == "default"  # type: ignore[union-attr]
+
+
+def test_run_propagates_pydoit_failure_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(run_command_module, "run_doit", lambda config, arguments: 3)
+
+    result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "missing"])
+
+    assert result.exit_code == 3
+
+
 def test_help_exposes_core_commands_and_completion_flags(tmp_path: Path) -> None:
     app = create_app(repo_root=make_repo(tmp_path))
 
@@ -139,6 +173,7 @@ def test_help_exposes_core_commands_and_completion_flags(tmp_path: Path) -> None
     assert "init" not in result.stdout
     assert "doctor" in result.stdout
     assert "config" in result.stdout
+    assert "run" in result.stdout
     assert "--install-completion" in result.stdout
     assert "--show-completion" in result.stdout
 
@@ -150,6 +185,7 @@ def test_command_handlers_live_in_commands_package() -> None:
     assert (package / "commands/__init__.py").is_file()
     assert (package / "commands/doctor.py").is_file()
     assert (package / "commands/config.py").is_file()
+    assert (package / "commands/run.py").is_file()
     assert "def doctor(" not in entrypoint
     assert "def config_show(" not in entrypoint
     assert "def config_get(" not in entrypoint
