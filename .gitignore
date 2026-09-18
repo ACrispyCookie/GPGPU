@@ -11,3 +11,4 @@ config/gpgpu/local.toml
 docs/migration/CONFIGURATION.md
 /out/*
 !/out/.gitkeep
+*.surf.ron
