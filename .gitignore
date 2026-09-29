@@ -13,6 +13,7 @@
 *.xsa
 *_vitis/
 *_vivado/
+*.logfile
 
 # Python/local environments
 venv/
