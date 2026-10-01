@@ -2,8 +2,8 @@
 *.log
 *.str
 *.csv
-*_vitis/
-*_vivado/
+*vitis/
+*vivado/
 venv/
 __pycache__
 SSOT.md
