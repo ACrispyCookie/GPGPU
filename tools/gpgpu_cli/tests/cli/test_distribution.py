@@ -27,6 +27,13 @@ def test_repository_has_default_profile_and_local_override_template() -> None:
     assert profile["project"]["name"] == "ece338-gpgpu"
     assert profile["paths"]["hardware"]["root"] == "hardware"
     assert profile["paths"]["hardware"]["rtl"] == "rtl"
+    assert profile["paths"]["hardware"]["constraints"] == "constraints"
+    assert profile["hardware"]["vivado"]["project_name"] == "GPU"
+    assert profile["hardware"]["vivado"]["bd_name"] == "design_1"
+    assert profile["hardware"]["vivado"]["top"] == "design_1_wrapper"
+    assert profile["hardware"]["vivado"]["xsa_name"] == "gpgpu_platform"
+    assert profile["hardware"]["vivado"]["version"] == "2026.1"
+    assert profile["paths"]["build"]["hardware"]["platform"] == "platform"
     assert profile["tools"]["vivado"]["required"] is False
     assert profile["tests"]["rtl"]["random"]["iterations"] == 100
     assert profile["tests"]["rtl"]["random"]["seed"] == 0

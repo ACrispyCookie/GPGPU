@@ -199,6 +199,17 @@ def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> No
     assert "tests:rtl:all" in result.stdout
     assert "end-to-end" in result.stdout
     assert "SMX-only" in result.stdout
+    vivado_index = result.stdout.index("Vivado")
+    assert tests_index < vivado_index
+    assert "vivado:project" in result.stdout
+    assert "vivado:block-design" in result.stdout
+    assert "vivado:synthesis" in result.stdout
+    assert "vivado:implementation" in result.stdout
+    assert "vivado:bitstream" in result.stdout
+    assert "vivado:xsa" in result.stdout
+    assert "vivado:export-block-design" in result.stdout
+    assert "vivado:all" in result.stdout
+    assert "dependency chain" in result.stdout
 
 
 def test_help_exposes_core_commands_and_completion_flags(tmp_path: Path) -> None:

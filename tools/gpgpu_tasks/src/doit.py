@@ -19,6 +19,7 @@ if TYPE_CHECKING:
 _TASK_MODULES = (
     "tools/software/programs.py",
     "tools/tests/rtl.py",
+    "tools/hardware/vivado/tasks.py",
 )
 
 

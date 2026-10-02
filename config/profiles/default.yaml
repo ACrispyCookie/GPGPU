@@ -15,13 +15,13 @@ host_interface:
 hardware:
   fpga:
     part: xc7z020clg484-1
-    board_part: xilinx.com:zc702:part0:1.4
   vivado:
-    project_name: gpgpu_vivado
-    bd_name: gpgpu_system
-    top: gpgpu_system_wrapper
-    version: "2025.2"
-    jobs: 32
+    project_name: GPU
+    bd_name: design_1
+    top: design_1_wrapper
+    xsa_name: gpgpu_platform
+    version: "2026.1"
+    jobs: 6
 
 software:
   riscv:
@@ -48,6 +48,7 @@ paths:
       vivado: vivado
       reports: reports
       bitstream: bitstream
+      platform: platform
     software:
       root: software
       programs:
@@ -56,6 +57,7 @@ paths:
   hardware:
     root: hardware
     rtl: rtl
+    constraints: constraints
   software:
     root: software
     host: host

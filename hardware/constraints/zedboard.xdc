@@ -7,7 +7,6 @@
 
 # Connect to leds (Bank 33, 3.3V)
 set_property -dict {PACKAGE_PIN P20 IOSTANDARD LVCMOS33} [get_ports o_loading_0]
-#set_property -dict {PACKAGE_PIN T21 IOSTANDARD LVCMOS33} [get_ports o_running_0]
 set_property -dict {PACKAGE_PIN P21 IOSTANDARD LVCMOS33} [get_ports o_dumping_0]
 
 set_property IOSTANDARD LVCMOS33 [get_ports UART_0_0_rxd]
