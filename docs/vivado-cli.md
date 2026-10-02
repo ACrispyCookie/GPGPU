@@ -41,6 +41,36 @@ generating the HDL wrapper. Changing it invalidates the relevant task commands
 and causes the software, RTL simulator, and Vivado synthesis artifacts to be
 rebuilt.
 
+The five AXI GPIO base addresses are also Vivado-owned configuration:
+
+```yaml
+hardware:
+  vivado:
+    host_interface:
+      address_gpio: "0x41200000"
+      cmd_gpio: "0x41210000"
+      rdata_gpio: "0x41220000"
+      status_gpio: "0x41230000"
+      wdata_gpio: "0x41240000"
+```
+
+Each value must be a unique, 64-KiB-aligned 32-bit hexadecimal string. The
+task layer passes them to every Vivado stage and `vivado:block-design` applies
+them to the matching `processing_system7_0/Data` address segments before BD
+validation and wrapper generation. Changing one address invalidates the Vivado
+command fingerprint and rebuilds downstream artifacts.
+
+For a one-off command-line override, quote the YAML string value explicitly:
+
+```bash
+./gpgpu \
+  --set 'hardware.vivado.host_interface.address_gpio="0x50000000"' \
+  run vivado:all
+```
+
+Without the inner quotes, YAML interprets `0x50000000` as an integer and the
+address-schema validation rejects it.
+
 Run one stage with:
 
 ```bash
@@ -97,6 +127,9 @@ if the configured project or block design does not exist. Both commands check
 for machine-specific absolute paths and compare normalized content rather than
 timestamps. `architecture.num_cores` remains config-owned and is normalized to
 `$::NUM_CORES` instead of being captured as a machine/project-specific value.
+Likewise, exported concrete AXI GPIO offsets are normalized to the corresponding
+`$::HOST_*_GPIO` variables so a GUI export cannot replace configured addresses
+with one project's snapshot values.
 
 If the committed Tcl differs from the block design, the command prints a
 warning and updates it atomically. If there is no difference, it reports that

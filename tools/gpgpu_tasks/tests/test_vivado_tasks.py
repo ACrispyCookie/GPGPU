@@ -22,6 +22,11 @@ class StubResolvedConfig:
             "hardware.vivado.top": "gpgpu_block_design_wrapper",
             "hardware.vivado.xsa_name": "gpgpu_platform",
             "hardware.vivado.jobs": 8,
+            "hardware.vivado.host_interface.address_gpio": "0x41200000",
+            "hardware.vivado.host_interface.cmd_gpio": "0x41210000",
+            "hardware.vivado.host_interface.rdata_gpio": "0x41220000",
+            "hardware.vivado.host_interface.status_gpio": "0x41230000",
+            "hardware.vivado.host_interface.wdata_gpio": "0x41240000",
             "tools.vivado.command": "vivado-configured",
         }
         return values[key]
@@ -130,6 +135,11 @@ def test_vivado_commands_use_configured_tool_and_portable_repository_paths(
         assert "-jobs" in command
         assert "8" in command
         assert command[command.index("-num-cores") + 1] == "8"
+        assert command[command.index("-host-address-gpio") + 1] == "0x41200000"
+        assert command[command.index("-host-cmd-gpio") + 1] == "0x41210000"
+        assert command[command.index("-host-rdata-gpio") + 1] == "0x41220000"
+        assert command[command.index("-host-status-gpio") + 1] == "0x41230000"
+        assert command[command.index("-host-wdata-gpio") + 1] == "0x41240000"
 
     project_deps = set(tasks["vivado:project"]["file_dep"])
     assert str(tmp_path / "hardware/rtl/Top.sv") in project_deps
@@ -207,6 +217,15 @@ def test_tcl_scripts_keep_each_vivado_stage_separate() -> None:
     assert "generate_target all $bd_file" in block_design
     assert "make_wrapper -files $bd_file -top" in block_design
     assert "CONFIG.SP_PER_SM $NUM_CORES" in block_design
+    assert "assign_bd_address -offset $offset" in block_design
+    for variable in (
+        "HOST_ADDRESS_GPIO",
+        "HOST_CMD_GPIO",
+        "HOST_RDATA_GPIO",
+        "HOST_STATUS_GPIO",
+        "HOST_WDATA_GPIO",
+    ):
+        assert variable in block_design
     assert "launch_runs synth_1" not in block_design
 
     assert "reset_run synth_1" in synthesis
@@ -255,6 +274,11 @@ variable design_name
 set design_name gpgpu_block_design
 
 set_property -dict [list CONFIG.SP_PER_SM {8}] $GPGPU_0
+assign_bd_address -offset 0x41200000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_address/S_AXI/Reg] -force
+assign_bd_address -offset 0x41210000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_cmd/S_AXI/Reg] -force
+assign_bd_address -offset 0x41220000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_rdata/S_AXI/Reg] -force
+assign_bd_address -offset 0x41230000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_status/S_AXI/Reg] -force
+assign_bd_address -offset 0x41240000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_wdata/S_AXI/Reg] -force
 create_root_design ""
 """
 
@@ -263,10 +287,35 @@ create_root_design ""
     assert "set design_name $::BD_NAME" in normalized
     assert "set design_name gpgpu_block_design" in normalized
     assert "CONFIG.SP_PER_SM {$::NUM_CORES}" in normalized
+    assert "-offset $::HOST_ADDRESS_GPIO" in normalized
+    assert "-offset $::HOST_CMD_GPIO" in normalized
+    assert "-offset $::HOST_RDATA_GPIO" in normalized
+    assert "-offset $::HOST_STATUS_GPIO" in normalized
+    assert "-offset $::HOST_WDATA_GPIO" in normalized
     assert "# CHANGE DESIGN NAME HERE" not in normalized
     assert all(line == line.rstrip() for line in normalized.splitlines())
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
+
+
+@pytest.mark.parametrize(
+    "value",
+    ["41200000", "0xnothex", "0x41200001", "0x100000000", 0x41200000],
+)
+def test_host_interface_address_validation_rejects_invalid_values(value: object) -> None:
+    with pytest.raises((TypeError, ValueError)):
+        vivado._host_address(value, "hardware.vivado.host_interface.address_gpio")
+
+
+def test_host_interface_addresses_must_be_unique(tmp_path: Path) -> None:
+    class DuplicateAddressConfig(StubResolvedConfig):
+        def get(self, key: str):
+            if key == "hardware.vivado.host_interface.status_gpio":
+                return "0x41220000"
+            return super().get(key)
+
+    with pytest.raises(ValueError, match="must be unique"):
+        vivado.create_tasks(DuplicateAddressConfig(tmp_path))
 
 
 def test_automatic_extract_skips_cleanly_on_first_clone(tmp_path: Path) -> None:

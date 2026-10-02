@@ -428,11 +428,11 @@ proc create_root_design { parentCell } {
   [get_bd_pins proc_sys_reset_0/ext_reset_in]
 
   # Create address segments
-  assign_bd_address -offset 0x41200000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_address/S_AXI/Reg] -force
-  assign_bd_address -offset 0x41210000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_cmd/S_AXI/Reg] -force
-  assign_bd_address -offset 0x41220000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_rdata/S_AXI/Reg] -force
-  assign_bd_address -offset 0x41230000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_status/S_AXI/Reg] -force
-  assign_bd_address -offset 0x41240000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_wdata/S_AXI/Reg] -force
+  assign_bd_address -offset $::HOST_ADDRESS_GPIO -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_address/S_AXI/Reg] -force
+  assign_bd_address -offset $::HOST_CMD_GPIO -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_cmd/S_AXI/Reg] -force
+  assign_bd_address -offset $::HOST_RDATA_GPIO -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_rdata/S_AXI/Reg] -force
+  assign_bd_address -offset $::HOST_STATUS_GPIO -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_status/S_AXI/Reg] -force
+  assign_bd_address -offset $::HOST_WDATA_GPIO -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs axi_gpio_wdata/S_AXI/Reg] -force
 
 
   # Restore current instance

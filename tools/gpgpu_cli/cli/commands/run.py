@@ -65,6 +65,7 @@ The dependency chain is: conditional block-design extraction → project → blo
 • `vivado:project` — Recreate the generated Vivado project from repository RTL and XDC sources.
 
 • `vivado:block-design` — Recreate `gpgpu_block_design` and generate `gpgpu_block_design_wrapper`.
+  The configured `hardware.vivado.host_interface.*` addresses are applied to the five AXI GPIO segments before validation and wrapper generation.
 
 • `vivado:synthesis` — Run synthesis after creating the project and block design.
 

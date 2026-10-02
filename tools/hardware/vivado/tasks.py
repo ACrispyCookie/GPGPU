@@ -29,6 +29,19 @@ def _positive_int(config: ResolvedConfig, key: str) -> int:
     return value
 
 
+def _host_address(value: object, key: str) -> str:
+    """Validate and canonicalize one 64-KiB-aligned 32-bit AXI base address."""
+
+    if not isinstance(value, str) or re.fullmatch(r"0x[0-9A-Fa-f]{1,8}", value) is None:
+        raise TypeError(f"{key} must be a hexadecimal string such as 0x41200000")
+    numeric = int(value, 16)
+    if numeric > 0xFFFFFFFF:
+        raise ValueError(f"{key} must fit in a 32-bit address")
+    if numeric % 0x10000 != 0:
+        raise ValueError(f"{key} must be aligned to the 64-KiB AXI GPIO range")
+    return f"0x{numeric:08X}"
+
+
 def run_vivado(
     command: list[str],
     cwd: Path,
@@ -51,6 +64,13 @@ _DESIGN_NAME_BLOCK = re.compile(
 _NUM_CORES_PROPERTY = re.compile(
     r"(CONFIG\.SP_PER_SM\s+)\{[^{}\r\n]+\}"
 )
+_HOST_ADDRESS_SEGMENTS = {
+    "axi_gpio_address/S_AXI/Reg": "HOST_ADDRESS_GPIO",
+    "axi_gpio_cmd/S_AXI/Reg": "HOST_CMD_GPIO",
+    "axi_gpio_rdata/S_AXI/Reg": "HOST_RDATA_GPIO",
+    "axi_gpio_status/S_AXI/Reg": "HOST_STATUS_GPIO",
+    "axi_gpio_wdata/S_AXI/Reg": "HOST_WDATA_GPIO",
+}
 
 
 def normalize_exported_tcl(text: str, repo_root: Path, bd_name: str) -> str:
@@ -73,6 +93,15 @@ if {{[info exists ::BD_NAME]}} {{
     # architecture.num_cores owns this value; do not snapshot a local build's
     # concrete core count into the portable committed block-design source.
     normalized = _NUM_CORES_PROPERTY.sub(r"\g<1>{$::NUM_CORES}", normalized)
+
+    # hardware.vivado.host_interface owns these AXI offsets. Keep Vivado's
+    # exported segment structure, but replace snapshot values with Tcl globals.
+    for segment, variable in _HOST_ADDRESS_SEGMENTS.items():
+        address = re.compile(
+            rf"(assign_bd_address\s+-offset\s+)\S+"
+            rf"(?=[^\r\n]*\[get_bd_addr_segs\s+{re.escape(segment)}\])"
+        )
+        normalized = address.sub(rf"\g<1>$::{variable}", normalized)
 
     # Vivado's generated Tcl contains trailing spaces and variable blank lines.
     # Canonicalize them so repeated exports are stable and pass diff checks.
@@ -225,6 +254,19 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     xsa_name = _string(config, "hardware.vivado.xsa_name")
     num_cores = _positive_int(config, "architecture.num_cores")
     jobs = _positive_int(config, "hardware.vivado.jobs")
+    host_address_keys = {
+        "-host-address-gpio": "hardware.vivado.host_interface.address_gpio",
+        "-host-cmd-gpio": "hardware.vivado.host_interface.cmd_gpio",
+        "-host-rdata-gpio": "hardware.vivado.host_interface.rdata_gpio",
+        "-host-status-gpio": "hardware.vivado.host_interface.status_gpio",
+        "-host-wdata-gpio": "hardware.vivado.host_interface.wdata_gpio",
+    }
+    host_addresses = {
+        flag: _host_address(config.get(key), key)
+        for flag, key in host_address_keys.items()
+    }
+    if len(set(host_addresses.values())) != len(host_addresses):
+        raise ValueError("hardware.vivado.host_interface addresses must be unique")
 
     project_dir = vivado_build_root / project_name
     xdc_file = constraints_root / "zedboard.xdc"
@@ -269,6 +311,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         "-jobs",
         str(jobs),
     ]
+    for flag, address in host_addresses.items():
+        common_args.extend([flag, address])
 
     def command(script_name: str) -> list[str]:
         return [

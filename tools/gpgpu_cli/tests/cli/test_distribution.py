@@ -24,7 +24,6 @@ def test_repository_has_default_profile_and_local_override_template() -> None:
     template_path = REPO_ROOT / "config/local.yaml.example"
 
     profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
-    assert profile["project"]["name"] == "ece338-gpgpu"
     assert profile["paths"]["hardware"]["root"] == "hardware"
     assert profile["paths"]["hardware"]["rtl"] == "rtl"
     assert profile["paths"]["hardware"]["constraints"] == "constraints"
@@ -33,6 +32,14 @@ def test_repository_has_default_profile_and_local_override_template() -> None:
     assert profile["hardware"]["vivado"]["top"] == "gpgpu_block_design_wrapper"
     assert profile["hardware"]["vivado"]["xsa_name"] == "gpgpu_platform"
     assert profile["hardware"]["vivado"]["version"] == "2026.1"
+    assert profile["hardware"]["vivado"]["host_interface"] == {
+        "address_gpio": "0x41200000",
+        "cmd_gpio": "0x41210000",
+        "rdata_gpio": "0x41220000",
+        "status_gpio": "0x41230000",
+        "wdata_gpio": "0x41240000",
+    }
+    assert "host_interface" not in profile
     assert profile["paths"]["build"]["hardware"]["platform"] == "platform"
     assert profile["tools"]["vivado"]["required"] is False
     assert profile["tests"]["rtl"]["random"]["iterations"] == 100
@@ -55,13 +62,13 @@ def test_root_launcher_is_executable_and_runs_cli() -> None:
     assert '"${1:-}" == "init"' not in launcher_text
     assert '"$VENV/bin/gpgpu" doctor' in launcher_text
     result = subprocess.run(
-        [str(launcher), "config", "get", "project.name"],
+        [str(launcher), "config", "get", "architecture.num_cores"],
         cwd=REPO_ROOT / "hardware/rtl",
         check=True,
         capture_output=True,
         text=True,
     )
-    assert "ece338-gpgpu" in result.stdout
+    assert "24" in result.stdout
 
 
 

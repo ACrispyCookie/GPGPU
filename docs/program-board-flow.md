@@ -26,6 +26,11 @@
 
 8) Run Design Automation Assistant.
 
+The CLI then applies the AXI GPIO address map from
+`hardware.vivado.host_interface` in `config/profiles/default.yaml`. The default
+mapping is `address=0x41200000`, `cmd=0x41210000`, `rdata=0x41220000`,
+`status=0x41230000`, and `wdata=0x41240000`, each with a `0x00010000` range.
+
 9) Connect `processing_system7_0/FCLK_CLK0` to `GPGPU_0/clk_in` and `proc_sys_reset_0/peripheral_aresetn` to `GPGPU_0/rst`, if not connected by the assistant.
 
 10) Make the port `processing_system7_0/UART_0` external, then go to RTL Analysis > Open Elaborate Design.
