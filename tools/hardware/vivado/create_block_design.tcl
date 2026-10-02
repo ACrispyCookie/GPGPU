@@ -24,6 +24,14 @@ file delete -force [file join \
 
 source [file join $SCRIPT_DIR "${BD_NAME}.tcl"]
 
+set gpgpu_cell [get_bd_cells -quiet GPGPU_0]
+if {[llength $gpgpu_cell] != 1} {
+    error "Expected exactly one GPGPU module-reference cell named GPGPU_0"
+}
+set_property CONFIG.SP_PER_SM $NUM_CORES $gpgpu_cell
+validate_bd_design
+save_bd_design
+
 set bd_file [get_files -quiet "${BD_NAME}.bd"]
 if {[llength $bd_file] != 1} {
     error "Expected exactly one block design named ${BD_NAME}.bd"

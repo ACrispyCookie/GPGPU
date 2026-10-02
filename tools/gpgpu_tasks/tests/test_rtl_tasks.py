@@ -17,6 +17,7 @@ class StubResolvedConfig:
 
     def get(self, key: str):
         values = {
+            "architecture.num_cores": 8,
             "tools.python.command": sys.executable,
             "tools.iverilog.command": "iverilog-configured",
             "tools.vvp.command": "vvp-configured",
@@ -82,9 +83,24 @@ def test_create_tasks_defines_distinct_e2e_and_smx_pipelines(tmp_path: Path) -> 
     assert str(case / "program.mem") in generate_targets
     assert str(case / "data.mem") in generate_targets
     assert str(case / "regfile_c0.mem") in generate_targets
-    assert str(case / "regfile_c31.mem") in generate_targets
+    assert str(case / "regfile_c7.mem") in generate_targets
+    assert str(case / "regfile_c8.mem") not in generate_targets
 
-    for suite, testbench in (("e2e", "tb_GPGPU_e2e.v"), ("smx", "tb_GPGPU.v")):
+    generate_actions = tasks["tests:rtl:generate"]["actions"]
+    assert generate_actions[1][1][0] == [
+        sys.executable,
+        str(tmp_path / "tools/tests/expected_generator.py"),
+        "--num-cores",
+        "8",
+    ]
+    generate_fingerprint = tasks["tests:rtl:generate"]["uptodate"][0]
+    assert isinstance(generate_fingerprint, config_changed)
+    assert generate_fingerprint.config == {"num_cores": 8}
+
+    for suite, testbench, top in (
+        ("e2e", "tb_GPGPU_e2e.v", "tb_GPGPU_e2e"),
+        ("smx", "tb_GPGPU.v", "tb_GPGPU_smx_only"),
+    ):
         executable = tmp_path / f"build/tests/rtl/{suite}/main"
         log = tmp_path / f"build/tests/rtl/{suite}/simulation.log"
 
@@ -93,6 +109,12 @@ def test_create_tasks_defines_distinct_e2e_and_smx_pipelines(tmp_path: Path) -> 
         build_command = build_task["actions"][0][1][0]
         assert build_command[0] == "iverilog-configured"
         assert "-DSIM" in build_command
+        assert ["-s", top] == build_command[
+            build_command.index("-s") : build_command.index("-s") + 2
+        ]
+        assert ["-P", f"{top}.NUM_CORES=8"] == build_command[
+            build_command.index("-P") : build_command.index("-P") + 2
+        ]
         assert str(tmp_path / f"tests/hardware/rtl/{testbench}") in build_command
         assert len(build_task["uptodate"]) == 1
         tool_fingerprint = build_task["uptodate"][0]
@@ -137,6 +159,8 @@ def test_create_tasks_defines_distinct_e2e_and_smx_pipelines(tmp_path: Path) -> 
         str(tmp_path / "tools/tests/random_tester.py"),
         "--iterations",
         "100",
+        "--num-cores",
+        "8",
         "--seed",
         "12345",
         "--python",

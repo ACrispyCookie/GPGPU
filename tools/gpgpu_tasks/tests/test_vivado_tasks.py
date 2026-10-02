@@ -13,6 +13,7 @@ class StubResolvedConfig:
 
     def get(self, key: str):
         values = {
+            "architecture.num_cores": 8,
             "hardware.fpga.part": "xc7z020clg484-1",
             "hardware.vivado.project_name": "GPU",
             "hardware.vivado.bd_name": "design_1",
@@ -124,6 +125,7 @@ def test_vivado_commands_use_configured_tool_and_portable_repository_paths(
         assert str(tmp_path / "hardware/constraints/zedboard.xdc") in command
         assert "-jobs" in command
         assert "8" in command
+        assert command[command.index("-num-cores") + 1] == "8"
 
     project_deps = set(tasks["vivado:project"]["file_dep"])
     assert str(tmp_path / "hardware/rtl/Top.sv") in project_deps
@@ -196,6 +198,7 @@ def test_tcl_scripts_keep_each_vivado_stage_separate() -> None:
     assert "remove_files $existing_wrapper" in block_design
     assert "generate_target all $bd_file" in block_design
     assert "make_wrapper -files $bd_file -top" in block_design
+    assert "CONFIG.SP_PER_SM $NUM_CORES" in block_design
     assert "launch_runs synth_1" not in block_design
 
     assert "reset_run synth_1" in synthesis

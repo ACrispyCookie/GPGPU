@@ -107,6 +107,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     python = _configured_command(config, "tools.python.command")
     iverilog = _configured_command(config, "tools.iverilog.command")
     vvp = _configured_command(config, "tools.vvp.command")
+    num_cores = _configured_positive_int(config, "architecture.num_cores")
 
     assembler = repo_root / "tools/tests/assembler.py"
     expected_generator = repo_root / "tools/tests/expected_generator.py"
@@ -129,7 +130,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         for output in (
             case / "program.mem",
             case / "data.mem",
-            *(case / f"regfile_c{core}.mem" for core in range(32)),
+            *(case / f"regfile_c{core}.mem" for core in range(num_cores)),
         )
     ]
 
@@ -147,7 +148,18 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "name": "tests:rtl:generate",
             "actions": [
                 (run_command, [[python, str(assembler)], test_root]),
-                (run_command, [[python, str(expected_generator)], test_root]),
+                (
+                    run_command,
+                    [
+                        [
+                            python,
+                            str(expected_generator),
+                            "--num-cores",
+                            str(num_cores),
+                        ],
+                        test_root,
+                    ],
+                ),
             ],
             "file_dep": [
                 str(assembler),
@@ -156,10 +168,15 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                 *(str(seed) for seed in optional_seeds),
             ],
             "targets": [str(target) for target in generated_targets],
+            "uptodate": [config_changed({"num_cores": num_cores})],
             "clean": True,
         }
     ]
 
+    testbench_tops = {
+        "e2e": "tb_GPGPU_e2e",
+        "smx": "tb_GPGPU_smx_only",
+    }
     for suite, testbench in testbenches.items():
         suite_build_root = build_root / suite
         executable = suite_build_root / "main"
@@ -175,6 +192,10 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "-I",
             str(rtl_root),
             "-DSIM",
+            "-s",
+            testbench_tops[suite],
+            "-P",
+            f"{testbench_tops[suite]}.NUM_CORES={num_cores}",
             "-o",
             str(executable),
             str(testbench),
@@ -230,6 +251,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         str(random_tester),
         "--iterations",
         str(random_iterations),
+        "--num-cores",
+        str(num_cores),
     ]
     if random_seed != 0:
         random_command.extend(["--seed", str(random_seed)])

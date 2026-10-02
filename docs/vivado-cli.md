@@ -32,6 +32,12 @@ vivado:project
                       └─ vivado:xsa
 ```
 
+`architecture.num_cores` is the shared core-count setting. The RTL test flow
+passes it to both testbench top-level parameters and expected-memory generation;
+the Vivado block-design stage applies it to `GPGPU.SP_PER_SM` before generating
+the HDL wrapper. Changing it invalidates the relevant task commands and causes
+the RTL simulators and Vivado project/synthesis artifacts to be rebuilt.
+
 Run one stage with:
 
 ```bash

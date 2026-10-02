@@ -14,6 +14,7 @@ array set options {
     -platform-dir ""
     -xsa-name ""
     -export-file ""
+    -num-cores ""
     -jobs ""
 }
 
@@ -46,8 +47,11 @@ set BITSTREAM_DIR [file normalize $options(-bitstream-dir)]
 set PLATFORM_DIR  [file normalize $options(-platform-dir)]
 set XSA_NAME      $options(-xsa-name)
 set EXPORT_FILE   [file normalize $options(-export-file)]
+set NUM_CORES     $options(-num-cores)
 set JOBS         $options(-jobs)
-
+if {![string is integer -strict $NUM_CORES] || $NUM_CORES < 1} {
+    error "-num-cores must be a positive integer, got: $NUM_CORES"
+}
 if {![string is integer -strict $JOBS] || $JOBS < 1} {
     error "-jobs must be a positive integer, got: $JOBS"
 }

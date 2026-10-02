@@ -1,13 +1,12 @@
 import os
 import re
 import argparse
-import sys
 from pathlib import Path
 
 # Memory configurations
 MEM_DEPTH = 2048
 REG_DEPTH = 32
-NUM_CORES = 32
+DEFAULT_NUM_CORES = 32
 STACK_P_INIT = 0
 
 def load_dmem_seed(seed_path):
@@ -320,13 +319,24 @@ def generate_expected_memories(asm_text, num_cores=2, initial_memory=None):
     return regfiles, memory
 
 def main():
-    num_cores = NUM_CORES 
+    parser = argparse.ArgumentParser(description="Generate expected multicore memories")
+    parser.add_argument("target_dir", nargs="?", help="Optional single test directory")
+    parser.add_argument(
+        "--num-cores",
+        type=int,
+        default=DEFAULT_NUM_CORES,
+        help="Number of streaming processors/cores",
+    )
+    args = parser.parse_args()
+    if args.num_cores < 1:
+        parser.error("--num-cores must be at least 1")
+
+    num_cores = args.num_cores
     current_dir = Path('.')
     asm_files = []
-    
-    if len(sys.argv) > 1:
-        target_dir = sys.argv[1]
-        asm_files = [Path(target_dir) / 'program.asm']
+
+    if args.target_dir:
+        asm_files = [Path(args.target_dir) / 'program.asm']
     else:
         for path in current_dir.glob('cases/test*/program.asm'):
             if re.fullmatch(r'test\d+', path.parent.name):
@@ -356,7 +366,9 @@ def main():
             print(f"  -> Loaded initial DMEM seed from {seed_path.name}")
 
         regfiles, memory = generate_expected_memories(asm_code, num_cores, initial_memory=initial_memory)
-            
+
+        for stale_regfile in test_dir.glob("regfile_c*.mem"):
+            stale_regfile.unlink()
         for core_id in range(num_cores):
             reg_filename = test_dir / f"regfile_c{core_id}.mem"
             with open(reg_filename, 'w') as f:

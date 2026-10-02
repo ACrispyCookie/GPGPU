@@ -157,6 +157,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     bd_name = _string(config, "hardware.vivado.bd_name")
     top_name = _string(config, "hardware.vivado.top")
     xsa_name = _string(config, "hardware.vivado.xsa_name")
+    num_cores = _positive_int(config, "architecture.num_cores")
     jobs = _positive_int(config, "hardware.vivado.jobs")
 
     project_dir = vivado_build_root / project_name
@@ -197,6 +198,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         xsa_name,
         "-export-file",
         str(project_dir / ".gpgpu" / f"{bd_name}.raw.tcl"),
+        "-num-cores",
+        str(num_cores),
         "-jobs",
         str(jobs),
     ]

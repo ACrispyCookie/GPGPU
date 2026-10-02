@@ -188,6 +188,8 @@ def main():
     parser = argparse.ArgumentParser(description="Multi-Core RISC-V Random Fuzzer")
     parser.add_argument("-i", "--iterations", type=int, default=100, 
                         help="Number of random tests to generate and run")
+    parser.add_argument("--num-cores", type=int, default=32,
+                        help="Number of streaming processors/cores")
     parser.add_argument("--seed", type=int,
                         help="Base seed used to reproduce a random-test run")
     parser.add_argument("--python", default=sys.executable,
@@ -204,6 +206,8 @@ def main():
 
     if args.iterations < 1:
         parser.error("--iterations must be at least 1")
+    if args.num_cores < 1:
+        parser.error("--num-cores must be at least 1")
 
     random_test_dir = args.test_root.resolve() / RANDOM_TEST_DIR
     if not os.path.exists(random_test_dir):
@@ -233,7 +237,13 @@ def main():
             if not run_generator([args.python, str(tools_dir / "assembler.py"), str(random_test_dir)], args.test_root, log):
                 print_and_log(f"Simulation stopped. The failing test has been preserved in '{random_test_dir}/'", log)
                 return 1
-            if not run_generator([args.python, str(tools_dir / "expected_generator.py"), str(random_test_dir)], args.test_root, log):
+            if not run_generator([
+                args.python,
+                str(tools_dir / "expected_generator.py"),
+                "--num-cores",
+                str(args.num_cores),
+                str(random_test_dir),
+            ], args.test_root, log):
                 print_and_log(f"Simulation stopped. The failing test has been preserved in '{random_test_dir}/'", log)
                 return 1
             
