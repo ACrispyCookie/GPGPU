@@ -1,6 +1,6 @@
 ## Create the GPGPU Block Design
 
-1) IP Integrator > Create Block Design > `design_1`.
+1) IP Integrator > Create Block Design > `gpgpu_block_design`.
 
 2) Add the following blocks:
 - 1 x ZYNQ 7000 PS
@@ -30,9 +30,9 @@
 
 10) Make the port `processing_system7_0/UART_0` external, then go to RTL Analysis > Open Elaborate Design.
 
-11) Click Sources > Design Sources > `design_1` > Create HDL Wrapper (all options deafult), this will create `design_1_wrapper`.
+11) Click Sources > Design Sources > `gpgpu_block_design` > Create HDL Wrapper (all options default), which creates `gpgpu_block_design_wrapper`.
 
-12) Set `design_1_wrapper` as Top Level Module.
+12) Set `gpgpu_block_design_wrapper` as Top Level Module.
 
 ![The final block design](./block-design-diagram.png)
 

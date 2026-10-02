@@ -24,12 +24,13 @@ Each command depends on the stage above it, so invoking a later stage runs any
 missing or out-of-date prerequisites automatically:
 
 ```text
-vivado:project
-  └─ vivado:block-design
-       └─ vivado:synthesis
-            └─ vivado:implementation
-                 └─ vivado:bitstream
-                      └─ vivado:xsa
+vivado:extract-block-design (when an existing project/BD is present)
+  └─ vivado:project
+       └─ vivado:block-design
+            └─ vivado:synthesis
+                 └─ vivado:implementation
+                      └─ vivado:bitstream
+                           └─ vivado:xsa
 ```
 
 `architecture.num_cores` is the shared core-count setting. The RTL test flow
@@ -62,20 +63,40 @@ The aggregate command runs the complete chain through both output artifacts:
 ./gpgpu run vivado:all
 ```
 
-## Exporting GUI block-design changes
+## Synchronizing GUI block-design changes
 
 After opening `build/hardware/vivado/GPU/GPU.xpr` in Vivado, editing
-`design_1`, and saving the block design, close the GUI project before running:
+`gpgpu_block_design`, and saving the block design, close the GUI project before
+running `vivado:all`.
+
+At the start of the dependency chain, `vivado:extract-block-design` behaves as
+follows:
+
+- if no generated project exists (for example, after a fresh clone), it keeps
+  and uses the committed `tools/hardware/vivado/gpgpu_block_design.tcl`;
+- if the project and `gpgpu_block_design.bd` exist, it runs `write_bd_tcl`,
+  normalizes the export, and atomically refreshes the committed Tcl only when
+  its content changed;
+- if the project contains a differently named `.bd`, it stops before project
+  recreation so an existing design cannot be deleted accidentally.
+
+The extraction task can also be invoked directly:
+
+```bash
+./gpgpu run vivado:extract-block-design
+```
+
+The strict/manual equivalent remains available:
 
 ```bash
 ./gpgpu run vivado:export-block-design
 ```
 
-This standalone task is deliberately not a dependency of any build stage and
-is not included in `vivado:all`. It runs Vivado's `write_bd_tcl` into a
-temporary file, normalizes the generated design-name block for portable use,
-checks for machine-specific absolute paths, and compares the result with
-`tools/hardware/vivado/design_1.tcl`.
+Unlike the conditional extraction stage, the manual command reports an error
+if the configured project or block design does not exist. Both commands check
+for machine-specific absolute paths and compare normalized content rather than
+timestamps. `architecture.num_cores` remains config-owned and is normalized to
+`$::NUM_CORES` instead of being captured as a machine/project-specific value.
 
 If the committed Tcl differs from the block design, the command prints a
 warning and updates it atomically. If there is no difference, it reports that
@@ -100,7 +121,7 @@ Generated project state is written to `build/hardware/vivado/GPU/`. The final
 outputs are:
 
 ```text
-build/hardware/bitstream/design_1_wrapper.bit
+build/hardware/bitstream/gpgpu_block_design_wrapper.bit
 build/hardware/platform/gpgpu_platform.xsa
 ```
 

@@ -4,6 +4,8 @@ from io import StringIO
 from pathlib import Path
 import sys
 
+import pytest
+
 from tools.hardware.vivado import tasks as vivado
 
 
@@ -16,8 +18,8 @@ class StubResolvedConfig:
             "architecture.num_cores": 8,
             "hardware.fpga.part": "xc7z020clg484-1",
             "hardware.vivado.project_name": "GPU",
-            "hardware.vivado.bd_name": "design_1",
-            "hardware.vivado.top": "design_1_wrapper",
+            "hardware.vivado.bd_name": "gpgpu_block_design",
+            "hardware.vivado.top": "gpgpu_block_design_wrapper",
             "hardware.vivado.xsa_name": "gpgpu_platform",
             "hardware.vivado.jobs": 8,
             "tools.vivado.command": "vivado-configured",
@@ -55,7 +57,7 @@ def make_repo(tmp_path: Path) -> StubResolvedConfig:
         "create_project.tcl",
         "create_block_design.tcl",
         "export_block_design.tcl",
-        "design_1.tcl",
+        "gpgpu_block_design.tcl",
         "synthesis.tcl",
         "implementation.tcl",
         "bitstream.tcl",
@@ -73,6 +75,7 @@ def test_vivado_tasks_form_a_strict_stage_pipeline(tmp_path: Path) -> None:
     tasks = tasks_by_name(make_repo(tmp_path))
 
     assert list(tasks) == [
+        "vivado:extract-block-design",
         "vivado:project",
         "vivado:block-design",
         "vivado:synthesis",
@@ -82,7 +85,8 @@ def test_vivado_tasks_form_a_strict_stage_pipeline(tmp_path: Path) -> None:
         "vivado:export-block-design",
         "vivado:all",
     ]
-    assert tasks["vivado:project"].get("task_dep", []) == []
+    assert tasks["vivado:extract-block-design"]["uptodate"] == [False]
+    assert tasks["vivado:project"]["task_dep"] == ["vivado:extract-block-design"]
     assert tasks["vivado:block-design"]["task_dep"] == ["vivado:project"]
     assert tasks["vivado:synthesis"]["task_dep"] == ["vivado:block-design"]
     assert tasks["vivado:implementation"]["task_dep"] == ["vivado:synthesis"]
@@ -141,6 +145,10 @@ def test_vivado_commands_use_configured_tool_and_portable_repository_paths(
     )
     assert "-export-file" in export_command
 
+    extract_action = tasks["vivado:extract-block-design"]["actions"][0]
+    assert extract_action[0] is vivado.extract_block_design_if_present
+    assert extract_action[1][0] == export_command
+
 
 def test_vivado_tasks_publish_expected_stage_artifacts(tmp_path: Path) -> None:
     tasks = tasks_by_name(make_repo(tmp_path))
@@ -148,25 +156,25 @@ def test_vivado_tasks_publish_expected_stage_artifacts(tmp_path: Path) -> None:
 
     assert tasks["vivado:project"]["targets"] == [str(project / "GPU.xpr")]
     assert tasks["vivado:block-design"]["targets"] == [
-        str(project / "GPU.srcs/sources_1/bd/design_1/design_1.bd"),
-        str(project / "GPU.gen/sources_1/bd/design_1/hdl/design_1_wrapper.v"),
+        str(project / "GPU.srcs/sources_1/bd/gpgpu_block_design/gpgpu_block_design.bd"),
+        str(project / "GPU.gen/sources_1/bd/gpgpu_block_design/hdl/gpgpu_block_design_wrapper.v"),
     ]
     assert tasks["vivado:synthesis"]["targets"] == [
-        str(project / "GPU.runs/synth_1/design_1_wrapper.dcp")
+        str(project / "GPU.runs/synth_1/gpgpu_block_design_wrapper.dcp")
     ]
-    assert str(project / "GPU.gen/sources_1/bd/design_1/hdl/design_1_wrapper.v") in tasks["vivado:synthesis"]["file_dep"]
+    assert str(project / "GPU.gen/sources_1/bd/gpgpu_block_design/hdl/gpgpu_block_design_wrapper.v") in tasks["vivado:synthesis"]["file_dep"]
     assert tasks["vivado:implementation"]["targets"] == [
-        str(project / "GPU.runs/impl_1/design_1_wrapper_routed.dcp")
+        str(project / "GPU.runs/impl_1/gpgpu_block_design_wrapper_routed.dcp")
     ]
-    assert str(project / "GPU.runs/synth_1/design_1_wrapper.dcp") in tasks["vivado:implementation"]["file_dep"]
+    assert str(project / "GPU.runs/synth_1/gpgpu_block_design_wrapper.dcp") in tasks["vivado:implementation"]["file_dep"]
     assert tasks["vivado:bitstream"]["targets"] == [
-        str(tmp_path / "build/hardware/bitstream/design_1_wrapper.bit")
+        str(tmp_path / "build/hardware/bitstream/gpgpu_block_design_wrapper.bit")
     ]
-    assert str(project / "GPU.runs/impl_1/design_1_wrapper_routed.dcp") in tasks["vivado:bitstream"]["file_dep"]
+    assert str(project / "GPU.runs/impl_1/gpgpu_block_design_wrapper_routed.dcp") in tasks["vivado:bitstream"]["file_dep"]
     assert tasks["vivado:xsa"]["targets"] == [
         str(tmp_path / "build/hardware/platform/gpgpu_platform.xsa")
     ]
-    assert str(tmp_path / "build/hardware/bitstream/design_1_wrapper.bit") in tasks["vivado:xsa"]["file_dep"]
+    assert str(tmp_path / "build/hardware/bitstream/gpgpu_block_design_wrapper.bit") in tasks["vivado:xsa"]["file_dep"]
 
 
 def test_committed_tcl_sources_are_checkout_portable() -> None:
@@ -219,7 +227,7 @@ def test_tcl_scripts_keep_each_vivado_stage_separate() -> None:
 def test_block_design_matches_documented_board_configuration() -> None:
     script_root = Path(__file__).resolve().parents[3] / "tools/hardware/vivado"
     repo_root = script_root.parents[2]
-    block_design = (script_root / "design_1.tcl").read_text(encoding="utf-8")
+    block_design = (script_root / "gpgpu_block_design.tcl").read_text(encoding="utf-8")
     constraints = (repo_root / "hardware/constraints/zedboard.xdc").read_text(
         encoding="utf-8"
     )
@@ -244,30 +252,122 @@ def test_block_design_matches_documented_board_configuration() -> None:
 def test_normalize_exported_tcl_adds_portable_design_name_hook(tmp_path: Path) -> None:
     raw = """# CHANGE DESIGN NAME HERE
 variable design_name
-set design_name design_1
+set design_name gpgpu_block_design
 
+set_property -dict [list CONFIG.SP_PER_SM {8}] $GPGPU_0
 create_root_design ""
 """
 
-    normalized = vivado.normalize_exported_tcl(raw, tmp_path, "design_1")
+    normalized = vivado.normalize_exported_tcl(raw, tmp_path, "gpgpu_block_design")
 
     assert "set design_name $::BD_NAME" in normalized
-    assert "set design_name design_1" in normalized
+    assert "set design_name gpgpu_block_design" in normalized
+    assert "CONFIG.SP_PER_SM {$::NUM_CORES}" in normalized
     assert "# CHANGE DESIGN NAME HERE" not in normalized
     assert all(line == line.rstrip() for line in normalized.splitlines())
     assert normalized.endswith("\n")
     assert not normalized.endswith("\n\n")
 
 
+def test_automatic_extract_skips_cleanly_on_first_clone(tmp_path: Path) -> None:
+    terminal = StringIO()
+    committed = tmp_path / "tools/hardware/vivado/gpgpu_block_design.tcl"
+    committed.parent.mkdir(parents=True)
+    committed.write_text("# committed bootstrap\n", encoding="utf-8")
+    vivado.extract_block_design_if_present(
+        ["vivado-must-not-run"],
+        tmp_path,
+        tmp_path / "build/GPU/GPU.xpr",
+        tmp_path / "build/GPU/GPU.srcs/sources_1/bd/gpgpu_block_design/gpgpu_block_design.bd",
+        tmp_path / "build/GPU/.gpgpu/gpgpu_block_design.raw.tcl",
+        committed,
+        tmp_path,
+        "gpgpu_block_design",
+        terminal=terminal,
+    )
+
+    assert "bootstrap" in terminal.getvalue().lower()
+
+
+def test_automatic_extract_updates_tcl_when_expected_project_bd_exists(
+    tmp_path: Path,
+) -> None:
+    project_file = tmp_path / "build/GPU/GPU.xpr"
+    bd_file = (
+        tmp_path
+        / "build/GPU/GPU.srcs/sources_1/bd/gpgpu_block_design/gpgpu_block_design.bd"
+    )
+    raw_export = tmp_path / "build/GPU/.gpgpu/gpgpu_block_design.raw.tcl"
+    committed = tmp_path / "tools/hardware/vivado/gpgpu_block_design.tcl"
+    project_file.parent.mkdir(parents=True)
+    project_file.write_text("project\n", encoding="utf-8")
+    bd_file.parent.mkdir(parents=True)
+    bd_file.write_text("design\n", encoding="utf-8")
+    raw_text = (
+        "# CHANGE DESIGN NAME HERE\n"
+        "variable design_name\n"
+        "set design_name gpgpu_block_design\n"
+        "create_root_design \"\"\n"
+    )
+    command = [
+        sys.executable,
+        "-c",
+        "from pathlib import Path; Path(r'%s').parent.mkdir(parents=True, exist_ok=True); "
+        "Path(r'%s').write_text(%r, encoding='utf-8')"
+        % (raw_export, raw_export, raw_text),
+    ]
+
+    vivado.extract_block_design_if_present(
+        command,
+        tmp_path,
+        project_file,
+        bd_file,
+        raw_export,
+        committed,
+        tmp_path,
+        "gpgpu_block_design",
+    )
+
+    assert committed.is_file()
+    assert "set design_name $::BD_NAME" in committed.read_text(encoding="utf-8")
+
+
+def test_automatic_extract_refuses_to_delete_differently_named_project_bd(
+    tmp_path: Path,
+) -> None:
+    project_file = tmp_path / "build/GPU/GPU.xpr"
+    expected_bd = (
+        tmp_path
+        / "build/GPU/GPU.srcs/sources_1/bd/gpgpu_block_design/gpgpu_block_design.bd"
+    )
+    old_bd = tmp_path / "build/GPU/GPU.srcs/sources_1/bd/design_1/design_1.bd"
+    project_file.parent.mkdir(parents=True)
+    project_file.write_text("project\n", encoding="utf-8")
+    old_bd.parent.mkdir(parents=True)
+    old_bd.write_text("old design\n", encoding="utf-8")
+
+    with pytest.raises(RuntimeError, match="design_1.bd"):
+        vivado.extract_block_design_if_present(
+            ["vivado-must-not-run"],
+            tmp_path,
+            project_file,
+            expected_bd,
+            tmp_path / "build/GPU/.gpgpu/gpgpu_block_design.raw.tcl",
+            tmp_path / "tools/hardware/vivado/gpgpu_block_design.tcl",
+            tmp_path,
+            "gpgpu_block_design",
+        )
+
+
 def test_export_warns_and_updates_when_committed_tcl_is_stale(tmp_path: Path) -> None:
-    raw_export = tmp_path / "build/design_1.raw.tcl"
-    committed = tmp_path / "tools/hardware/vivado/design_1.tcl"
+    raw_export = tmp_path / "build/gpgpu_block_design.raw.tcl"
+    committed = tmp_path / "tools/hardware/vivado/gpgpu_block_design.tcl"
     committed.parent.mkdir(parents=True)
     committed.write_text("# stale\n", encoding="utf-8")
     raw_text = (
         "# CHANGE DESIGN NAME HERE\n"
         "variable design_name\n"
-        "set design_name design_1\n"
+        "set design_name gpgpu_block_design\n"
         "create_root_design \"\"\n"
     )
     command = [
@@ -285,7 +385,7 @@ def test_export_warns_and_updates_when_committed_tcl_is_stale(tmp_path: Path) ->
         raw_export,
         committed,
         tmp_path,
-        "design_1",
+        "gpgpu_block_design",
         terminal=terminal,
     )
 
@@ -296,17 +396,17 @@ def test_export_warns_and_updates_when_committed_tcl_is_stale(tmp_path: Path) ->
 
 
 def test_export_reports_up_to_date_without_warning(tmp_path: Path) -> None:
-    raw_export = tmp_path / "build/design_1.raw.tcl"
-    committed = tmp_path / "tools/hardware/vivado/design_1.tcl"
+    raw_export = tmp_path / "build/gpgpu_block_design.raw.tcl"
+    committed = tmp_path / "tools/hardware/vivado/gpgpu_block_design.tcl"
     committed.parent.mkdir(parents=True)
     raw_text = (
         "# CHANGE DESIGN NAME HERE\n"
         "variable design_name\n"
-        "set design_name design_1\n"
+        "set design_name gpgpu_block_design\n"
         "create_root_design \"\"\n"
     )
     committed.write_text(
-        vivado.normalize_exported_tcl(raw_text, tmp_path, "design_1"),
+        vivado.normalize_exported_tcl(raw_text, tmp_path, "gpgpu_block_design"),
         encoding="utf-8",
     )
     command = [
@@ -324,7 +424,7 @@ def test_export_reports_up_to_date_without_warning(tmp_path: Path) -> None:
         raw_export,
         committed,
         tmp_path,
-        "design_1",
+        "gpgpu_block_design",
         terminal=terminal,
     )
 

@@ -58,11 +58,13 @@ Example: `software:programs:simple:x86`
 
 [bold cyan]Vivado[/bold cyan]
 
-The dependency chain is: project → block design/wrapper → synthesis → implementation → bitstream → XSA hardware platform.
+The dependency chain is: conditional block-design extraction → project → block design/wrapper → synthesis → implementation → bitstream → XSA hardware platform.
+
+• `vivado:extract-block-design` — If the configured project and block design exist, refresh the committed portable Tcl before any potentially destructive project recreation; otherwise use the committed Tcl as the first-clone bootstrap.
 
 • `vivado:project` — Recreate the generated Vivado project from repository RTL and XDC sources.
 
-• `vivado:block-design` — Recreate `design_1` and generate its HDL wrapper.
+• `vivado:block-design` — Recreate `gpgpu_block_design` and generate `gpgpu_block_design_wrapper`.
 
 • `vivado:synthesis` — Run synthesis after creating the project and block design.
 
@@ -72,9 +74,9 @@ The dependency chain is: project → block design/wrapper → synthesis → impl
 
 • `vivado:xsa` — Export `gpgpu_platform.xsa` with the generated bitstream included, ready for a later Vitis platform flow.
 
-• `vivado:export-block-design` — Export the current generated-project block design, normalize its Tcl for portable repository use, and warn when the committed Tcl was out of date. This task is standalone and is not part of `vivado:all`.
+• `vivado:export-block-design` — Strictly export the current generated-project block design on explicit request. Unlike the conditional extraction task, this fails when the project/design is absent.
 
-• `vivado:all` — Run the complete Vivado dependency chain through `.bit` and `.xsa` generation.
+• `vivado:all` — Conditionally extract an existing block design, then run the complete dependency chain through `.bit` and `.xsa` generation.
 """
 
 

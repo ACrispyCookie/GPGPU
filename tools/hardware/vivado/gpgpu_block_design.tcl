@@ -1,6 +1,6 @@
 
 ################################################################
-# This is a generated script based on design: design_1
+# This is a generated script based on design: gpgpu_block_design
 #
 # Though there are limitations about the generated script,
 # the main purpose of this utility is to make learning
@@ -41,7 +41,7 @@ if { [string first $scripts_vivado_version $current_vivado_version] == -1 } {
 ################################################################
 
 # To test this script, run the following commands from Vivado Tcl console:
-# source design_1_script.tcl
+# source gpgpu_block_design.tcl
 
 
 # The design that will be created by this Tcl script contains the following
@@ -65,7 +65,7 @@ variable design_name
 if {[info exists ::BD_NAME]} {
    set design_name $::BD_NAME
 } else {
-   set design_name design_1
+   set design_name gpgpu_block_design
 }
 
 # If you do not already have an existing IP Integrator design open,

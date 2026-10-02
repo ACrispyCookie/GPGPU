@@ -16,8 +16,8 @@ hardware:
     part: xc7z020clg484-1
   vivado:
     project_name: GPU
-    bd_name: design_1
-    top: design_1_wrapper
+    bd_name: gpgpu_block_design
+    top: gpgpu_block_design_wrapper
     xsa_name: gpgpu_platform
     version: "2026.1"
     jobs: 6

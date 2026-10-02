@@ -207,6 +207,7 @@ def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> No
     assert "vivado:implementation" in result.stdout
     assert "vivado:bitstream" in result.stdout
     assert "vivado:xsa" in result.stdout
+    assert "vivado:extract-block-design" in result.stdout
     assert "vivado:export-block-design" in result.stdout
     assert "vivado:all" in result.stdout
     assert "dependency chain" in result.stdout

@@ -48,6 +48,9 @@ _DESIGN_NAME_BLOCK = re.compile(
     r"variable design_name\s*\n"
     r"set design_name\s+\S+"
 )
+_NUM_CORES_PROPERTY = re.compile(
+    r"(CONFIG\.SP_PER_SM\s+)\{[^{}\r\n]+\}"
+)
 
 
 def normalize_exported_tcl(text: str, repo_root: Path, bd_name: str) -> str:
@@ -66,6 +69,10 @@ if {{[info exists ::BD_NAME]}} {{
             "Vivado export did not contain the expected design-name block; "
             "refusing to overwrite the committed Tcl"
         )
+
+    # architecture.num_cores owns this value; do not snapshot a local build's
+    # concrete core count into the portable committed block-design source.
+    normalized = _NUM_CORES_PROPERTY.sub(r"\g<1>{$::NUM_CORES}", normalized)
 
     # Vivado's generated Tcl contains trailing spaces and variable blank lines.
     # Canonicalize them so repeated exports are stable and pass diff checks.
@@ -127,6 +134,65 @@ def export_block_design(
         temporary.replace(committed_export)
     finally:
         raw_export.unlink(missing_ok=True)
+
+
+def extract_block_design_if_present(
+    command: list[str],
+    cwd: Path,
+    project_file: Path,
+    bd_file: Path,
+    raw_export: Path,
+    committed_export: Path,
+    repo_root: Path,
+    bd_name: str,
+    terminal: TextIO | None = None,
+) -> None:
+    """Refresh committed Tcl from an existing project, or bootstrap from Git."""
+
+    output: TextIO = terminal or sys.__stderr__ or sys.stderr
+    if not project_file.is_file():
+        if not committed_export.is_file():
+            raise RuntimeError(
+                f"Neither the Vivado project nor committed block-design Tcl exists: "
+                f"{committed_export}"
+            )
+        output.write(
+            "INFO: no existing Vivado project; using the committed block-design "
+            "Tcl as the first-clone bootstrap.\n"
+        )
+        output.flush()
+        return
+
+    if not bd_file.is_file():
+        existing_designs = sorted(bd_file.parents[1].glob("*/*.bd"))
+        if existing_designs:
+            found = ", ".join(path.name for path in existing_designs)
+            raise RuntimeError(
+                f"Vivado project exists but does not contain {bd_name}.bd; found: "
+                f"{found}. Rename the project block design or set "
+                "hardware.vivado.bd_name before continuing."
+            )
+        if not committed_export.is_file():
+            raise RuntimeError(
+                f"Vivado project has no {bd_name}.bd and the committed bootstrap "
+                f"does not exist: {committed_export}"
+            )
+        output.write(
+            f"INFO: Vivado project has no saved {bd_name}.bd; using the committed "
+            "Tcl as the bootstrap.\n"
+        )
+        output.flush()
+        return
+
+    export_block_design(
+        command,
+        cwd,
+        raw_export,
+        committed_export,
+        repo_root,
+        bd_name,
+        terminal=output,
+    )
 
 
 def _source_files(rtl_root: Path) -> list[Path]:
@@ -231,6 +297,29 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
 
     return [
         {
+            "name": "vivado:extract-block-design",
+            "actions": [
+                (
+                    extract_block_design_if_present,
+                    [
+                        stage_commands["export-block-design"],
+                        repo_root,
+                        project_file,
+                        bd_file,
+                        raw_bd_export,
+                        exported_bd_script,
+                        repo_root,
+                        bd_name,
+                    ],
+                )
+            ],
+            "file_dep": [
+                str(common_script),
+                str(scripts / "export_block_design.tcl"),
+            ],
+            "uptodate": [False],
+        },
+        {
             "name": "vivado:project",
             "actions": [
                 (
@@ -238,6 +327,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     [stage_commands["project"], repo_root, project_dir, True],
                 )
             ],
+            "task_dep": ["vivado:extract-block-design"],
             "file_dep": [
                 str(common_script),
                 str(scripts / "create_project.tcl"),
