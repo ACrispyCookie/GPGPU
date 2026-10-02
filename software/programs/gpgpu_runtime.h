@@ -2,6 +2,7 @@
 #define GPGPU_RUNTIME_H
 
 #include <stdint.h>
+#include "gpgpu_config.h"
 
 /* Linker-provided DMEM symbols from gpgpu.ld.  These are byte addresses from
  * the RISC-V core's point of view; host UART DMEM word offset = address / 4. */
@@ -11,7 +12,6 @@ extern char __stack_top[];
 
 #define GPGPU_ARGS   ((volatile int *)__gpu_args_base)
 
-#define GPGPU_NUM_CORES    32u
 #define GPGPU_STACK_STRIDE 64u
 
 static inline __attribute__((always_inline)) unsigned int gpgpu_thread_id(void)

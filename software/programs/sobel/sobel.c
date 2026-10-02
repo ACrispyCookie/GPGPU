@@ -1,7 +1,9 @@
 #define WIDTH  16
 #define HEIGHT 16
 
-#define CORES 32
+#include "../gpgpu_config.h"
+
+#define CORES GPGPU_NUM_CORES
 
 // ======================================================
 // Input Image

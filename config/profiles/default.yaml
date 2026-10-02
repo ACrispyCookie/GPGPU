@@ -2,7 +2,7 @@ project:
   name: ece338-gpgpu
 
 architecture:
-  num_cores: 2
+  num_cores: 24
 
 host_interface:
   address_gpio: "0x41200000"

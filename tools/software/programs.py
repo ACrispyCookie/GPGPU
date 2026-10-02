@@ -11,6 +11,8 @@ import re
 import subprocess
 from typing import TYPE_CHECKING, Any
 
+from doit.tools import config_changed
+
 if TYPE_CHECKING:
     from config import ResolvedConfig
 
@@ -36,6 +38,13 @@ _INSTRUCTION_LINE = re.compile(r"^\s*[0-9a-fA-F]+:\s+(\S+)(?:\s+(.*))?$")
 
 def _run_command(command: list[str]) -> None:
     subprocess.run(command, check=True)
+
+
+def _positive_int(config: ResolvedConfig, key: str) -> int:
+    value = config.get(key)
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        raise ValueError(f"{key} must be a positive integer")
+    return value
 
 
 def _objdump_for(compiler: str) -> str:
@@ -118,6 +127,12 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
     directory = programs_root / program
     source = directory / f"{program}.c"
     linker_script = programs_root / "gpgpu.ld"
+    header_dependencies = sorted(
+        {
+            *programs_root.glob("*.h"),
+            *directory.glob("*.h"),
+        }
+    )
 
     native_executable = directory / f"{program}_x86"
     elf = directory / f"{program}.elf"
@@ -130,6 +145,7 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
     riscv_cc = config.get("tools.riscv_gcc.command")
     march = config.get("software.riscv.march")
     abi = config.get("software.riscv.abi")
+    num_cores = _positive_int(config, "architecture.num_cores")
     for key, value in (
         ("tools.native_cc.command", native_cc),
         ("tools.riscv_gcc.command", riscv_cc),
@@ -149,12 +165,21 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
     mem_name = f"{prefix}:mem"
     riscv_build_name = f"{prefix}:riscv:build"
 
-    native_command = [native_cc, "-O2", "-o", str(native_executable), str(source)]
+    core_define = f"-DGPGPU_NUM_CORES={num_cores}"
+    native_command = [
+        native_cc,
+        "-O2",
+        core_define,
+        "-o",
+        str(native_executable),
+        str(source),
+    ]
     elf_command = [
         riscv_cc,
         "-O2",
         f"-march={march}",
         f"-mabi={abi}",
+        core_define,
         *_RISCV_CFLAGS[1:],
         "-o",
         str(elf),
@@ -170,8 +195,9 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
         {
             "name": x86_build_name,
             "actions": [(_run_command, [native_command])],
-            "file_dep": [str(source)],
+            "file_dep": [str(source), *(str(path) for path in header_dependencies)],
             "targets": [str(native_executable)],
+            "uptodate": [config_changed({"num_cores": num_cores})],
             "clean": True,
         },
         {
@@ -183,8 +209,13 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
         {
             "name": elf_name,
             "actions": [(_run_command, [elf_command])],
-            "file_dep": [str(source), str(linker_script)],
+            "file_dep": [
+                str(source),
+                str(linker_script),
+                *(str(path) for path in header_dependencies),
+            ],
             "targets": [str(elf), str(link_map)],
+            "uptodate": [config_changed({"num_cores": num_cores})],
             "clean": True,
         },
         {

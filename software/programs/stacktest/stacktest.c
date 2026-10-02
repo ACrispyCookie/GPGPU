@@ -1,4 +1,6 @@
-#define CORES 32
+#include "../gpgpu_config.h"
+
+#define CORES GPGPU_NUM_CORES
 
 #ifdef __riscv
 

@@ -4,6 +4,7 @@ from pathlib import Path
 import shutil
 
 import pytest
+from doit.tools import config_changed
 from tools.software import programs
 
 
@@ -13,6 +14,7 @@ class StubResolvedConfig:
 
     def get(self, key: str):
         values = {
+            "architecture.num_cores": 8,
             "paths.software.programs": "programs",
             "software.riscv.march": "rv32im",
             "software.riscv.abi": "ilp32",
@@ -32,6 +34,8 @@ def make_repo(tmp_path: Path) -> StubResolvedConfig:
     program_dir.mkdir(parents=True)
     (program_dir / "example.c").write_text("int main(void) { return 0; }\n")
     (programs_dir / "gpgpu.ld").write_text("SECTIONS {}\n")
+    (programs_dir / "gpgpu_config.h").write_text("#define GPGPU_NUM_CORES 32u\n")
+    (programs_dir / "gpgpu_runtime.h").write_text('#include "gpgpu_config.h"\n')
     return StubResolvedConfig(tmp_path)
 
 
@@ -59,6 +63,7 @@ def test_create_tasks_preserves_makefile_build_graph_and_flags(tmp_path: Path) -
     assert x86_command == [
         "gcc",
         "-O2",
+        "-DGPGPU_NUM_CORES=8",
         "-o",
         str(tmp_path / "software/programs/example/example_x86"),
         str(tmp_path / "software/programs/example/example.c"),
@@ -68,10 +73,18 @@ def test_create_tasks_preserves_makefile_build_graph_and_flags(tmp_path: Path) -
     assert elf_command[0] == "/opt/riscv/bin/riscv64-unknown-elf-gcc"
     assert "-march=rv32im" in elf_command
     assert "-mabi=ilp32" in elf_command
+    assert "-DGPGPU_NUM_CORES=8" in elf_command
     assert "-ffixed-x31" in elf_command
     assert "-mno-relax" in elf_command
     assert f"-Wl,-T,{tmp_path / 'software/programs/gpgpu.ld'}" in elf_command
     assert f"-Wl,-Map,{tmp_path / 'software/programs/example/example.map'}" in elf_command
+
+    for task_name in (f"{prefix}:x86:build", f"{prefix}:elf"):
+        fingerprint = tasks[task_name]["uptodate"][0]
+        assert isinstance(fingerprint, config_changed)
+        assert fingerprint.config == {"num_cores": 8}
+        assert str(tmp_path / "software/programs/gpgpu_config.h") in tasks[task_name]["file_dep"]
+        assert str(tmp_path / "software/programs/gpgpu_runtime.h") in tasks[task_name]["file_dep"]
 
     assert tasks[f"{prefix}:dump"]["task_dep"] == [f"{prefix}:elf"]
     assert tasks[f"{prefix}:assembly"]["task_dep"] == [f"{prefix}:dump"]
