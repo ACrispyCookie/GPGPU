@@ -34,35 +34,8 @@ tests:
       seed: 0
 
 paths:
-  config: config
   build:
     root: build
-    hardware:
-      root: hardware
-      vivado: vivado
-      reports: reports
-      bitstream: bitstream
-      platform: platform
-    software:
-      root: software
-      programs:
-        root: programs
-        elf: elf
-  hardware:
-    root: hardware
-    rtl: rtl
-    constraints: constraints
-  software:
-    root: software
-    host: host
-    programs: programs
-  tests:
-    root: tests
-  demo: demo
-
-doctor:
-  generated_paths:
-    - paths.build
 
 # Commands are names or paths. Machine-specific paths belong in config/local.yaml.
 tools:

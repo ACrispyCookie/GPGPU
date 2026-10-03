@@ -48,8 +48,6 @@ from __future__ import annotations
 
 import argparse
 import csv
-import subprocess
-import sys
 from pathlib import Path
 
 from fpga_run import DmemWindow, ProgramAdapter as BaseProgramAdapter
@@ -81,10 +79,10 @@ def int32_from_hex(word: str) -> int:
 
 
 class ProgramAdapter(BaseProgramAdapter):
-    def __init__(self, program_dir: Path):
-        super().__init__(program_dir)
+    def __init__(self, program_dir: Path, artifact_dir: Path):
+        super().__init__(program_dir, artifact_dir)
 
-        self.csv_path = self.program_dir / "data.csv"
+        self.csv_path = self.artifact_dir / "data.csv"
         self.current_step = 0
         self.history: list[list[int]] = []
 
@@ -261,13 +259,4 @@ class ProgramAdapter(BaseProgramAdapter):
         print(f"[INFO] Appended nbody output row for step {row[0]} to {self.csv_path}")
 
     def finalize(self, *, visualize: bool, adapter_args: argparse.Namespace) -> None:
-        if not visualize:
-            return
-
-        visualize_script = self.program_dir / "visualize.py"
-        if not visualize_script.exists():
-            print("[INFO] No visualize.py found; skipping visualization")
-            return
-
-        print(f"[INFO] Running visualization: {visualize_script}")
-        subprocess.run([sys.executable, str(visualize_script)], cwd=self.program_dir, check=True)
+        super().finalize(visualize=visualize, adapter_args=adapter_args)

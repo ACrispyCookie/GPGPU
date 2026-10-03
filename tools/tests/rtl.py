@@ -9,6 +9,7 @@ import sys
 from typing import TYPE_CHECKING, Any, TextIO
 
 from doit.tools import config_changed
+from src.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from config import ResolvedConfig
@@ -98,11 +99,11 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create generation, build, run, and aggregate tasks for RTL tests."""
 
     repo_root = config.repo_root
-    rtl_root = config.repo_path("paths.hardware.rtl")
-    tests_root = config.repo_path("paths.tests.root")
-    test_root = tests_root / "hardware/rtl"
+    paths = ProjectPaths.from_config(config)
+    rtl_root = paths.hardware_rtl
+    test_root = paths.rtl_tests
     cases_root = test_root / "cases"
-    build_root = config.repo_path("paths.build.root") / "tests/rtl"
+    build_root = paths.rtl_test_build
 
     python = _configured_command(config, "tools.python.command")
     iverilog = _configured_command(config, "tools.iverilog.command")

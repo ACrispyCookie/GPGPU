@@ -26,13 +26,9 @@ class StubResolvedConfig:
         }
         return values[key]
 
-    def repo_path(self, key: str) -> Path:
-        values = {
-            "paths.hardware.rtl": self.repo_root / "hardware/rtl",
-            "paths.tests.root": self.repo_root / "tests",
-            "paths.build.root": self.repo_root / "build",
-        }
-        return values[key]
+    @property
+    def build_root(self) -> Path:
+        return self.repo_root / "build"
 
 
 def make_repo(tmp_path: Path) -> StubResolvedConfig:

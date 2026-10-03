@@ -6,9 +6,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-PROGRAMS_DIR="$REPO_ROOT/software/programs"
+GPGPU="$REPO_ROOT/gpgpu"
+BUILD_ROOT="$("$GPGPU" config get paths.build.root --resolved-path)"
 PROGRAM="nbody"
-NBODY_DIR="$PROGRAMS_DIR/$PROGRAM"
 
 PORT=""
 BAUD=115200
@@ -125,7 +125,7 @@ if [[ "$PROGRAM" != "nbody" && "$PROGRAM" != "nbody-3d" ]]; then
     echo "--program must be either nbody or nbody-3d"
     exit 1
 fi
-NBODY_DIR="$PROGRAMS_DIR/$PROGRAM"
+PROGRAM_BUILD_DIR="$BUILD_ROOT/software/programs/$PROGRAM"
 SCRIPT="interactive.py"
 if [[ "$PROGRAM" == "nbody-3d" ]]; then
     SCRIPT="interactive_3d.py"
@@ -138,14 +138,15 @@ fi
 
 if [[ "$BUILD" -eq 1 ]]; then
     if [[ "$FAKE" -eq 1 ]]; then
-        make -C "$PROGRAMS_DIR" PROG="$PROGRAM" x86
+        "$GPGPU" run "software:programs:$PROGRAM:x86:build"
     else
-        make -C "$PROGRAMS_DIR" PROG="$PROGRAM" riscv
-        make -C "$PROGRAMS_DIR" PROG="$PROGRAM" "$PROGRAM/${PROGRAM}_instructions.mem"
+        "$GPGPU" run "software:programs:$PROGRAM:riscv:build"
+        "$GPGPU" run "software:programs:$PROGRAM:mem"
     fi
 fi
 
 ARGS=(
+    --build-root "$BUILD_ROOT"
     --steps-per-frame "$STEPS_PER_FRAME"
     --fps "$FPS"
     --http-host "$HTTP_HOST"
@@ -155,7 +156,7 @@ ARGS=(
 if [[ "$FAKE" -eq 1 ]]; then
     ARGS+=(--fake)
 else
-    ARGS+=(--port "$PORT" --baud "$BAUD" --imem "$NBODY_DIR/${PROGRAM}_instructions.mem")
+    ARGS+=(--port "$PORT" --baud "$BAUD" --imem "$PROGRAM_BUILD_DIR/${PROGRAM}_instructions.mem")
 fi
 if [[ "$SKIP_LOAD_IMEM" -eq 1 ]]; then
     ARGS+=(--skip-load-imem)

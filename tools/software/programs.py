@@ -8,10 +8,12 @@ from __future__ import annotations
 
 from pathlib import Path
 import re
+import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
 
 from doit.tools import config_changed
+from src.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from config import ResolvedConfig
@@ -36,8 +38,32 @@ _RISCV_LDFLAGS = (
 _INSTRUCTION_LINE = re.compile(r"^\s*[0-9a-fA-F]+:\s+(\S+)(?:\s+(.*))?$")
 
 
-def _run_command(command: list[str]) -> None:
+def _run_command(command: list[str], output_directory: Path | None = None) -> None:
+    if output_directory is not None:
+        output_directory.mkdir(parents=True, exist_ok=True)
     subprocess.run(command, check=True)
+
+
+def clean_program_artifacts(build_root: Path, artifact_directory: Path) -> None:
+    """Remove one program build directory without following build-tree symlinks."""
+
+    root = build_root.resolve()
+    candidate = artifact_directory.absolute()
+    try:
+        relative = candidate.relative_to(root)
+    except ValueError as exc:
+        raise RuntimeError(f"Refusing to clean outside build root: {candidate}") from exc
+    if not relative.parts:
+        raise RuntimeError("Refusing to clean the build root itself")
+
+    current = root
+    for component in relative.parts:
+        current /= component
+        if current.is_symlink():
+            raise RuntimeError(f"Refusing to clean through symbolic link: {current}")
+
+    if candidate.exists():
+        shutil.rmtree(candidate)
 
 
 def _positive_int(config: ResolvedConfig, key: str) -> int:
@@ -67,6 +93,7 @@ def _instruction_fields(line: str) -> tuple[str, str] | None:
 def write_disassembly(command: list[str], output: Path) -> None:
     """Run objdump and write its complete disassembly to *output*."""
 
+    output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8") as stream:
         subprocess.run(command, check=True, stdout=stream)
 
@@ -87,6 +114,7 @@ def write_disassembly(command: list[str], output: Path) -> None:
 def write_program_assembly(disassembly: Path, output: Path) -> None:
     """Extract instruction mnemonics and operands from an objdump listing."""
 
+    output.parent.mkdir(parents=True, exist_ok=True)
     lines = []
     for line in disassembly.read_text(encoding="utf-8").splitlines():
         fields = _instruction_fields(line)
@@ -98,6 +126,7 @@ def write_program_assembly(disassembly: Path, output: Path) -> None:
 def write_instruction_memory(disassembly: Path, output: Path) -> None:
     """Extract 32-bit instruction words from an objdump listing."""
 
+    output.parent.mkdir(parents=True, exist_ok=True)
     words = []
     for line in disassembly.read_text(encoding="utf-8").splitlines():
         fields = _instruction_fields(line)
@@ -107,11 +136,7 @@ def write_instruction_memory(disassembly: Path, output: Path) -> None:
 
 
 def _programs_root(config: ResolvedConfig) -> Path:
-    software_root = config.repo_path("paths.software.root")
-    programs_component = config.get("paths.software.programs")
-    if not isinstance(programs_component, str):
-        raise TypeError("paths.software.programs must be a string")
-    return software_root / programs_component
+    return ProjectPaths.from_config(config).software_programs
 
 
 def _program_names(programs_root: Path) -> list[str]:
@@ -123,8 +148,10 @@ def _program_names(programs_root: Path) -> list[str]:
 
 
 def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]:
-    programs_root = _programs_root(config)
+    paths = ProjectPaths.from_config(config)
+    programs_root = paths.software_programs
     directory = programs_root / program
+    artifact_directory = paths.program_builds / program
     source = directory / f"{program}.c"
     linker_script = programs_root / "gpgpu.ld"
     header_dependencies = sorted(
@@ -134,12 +161,12 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
         }
     )
 
-    native_executable = directory / f"{program}_x86"
-    elf = directory / f"{program}.elf"
-    link_map = directory / f"{program}.map"
-    dump = directory / f"{program}_dump_real.asm"
-    assembly = directory / f"{program}_program.asm"
-    memory = directory / f"{program}_instructions.mem"
+    native_executable = artifact_directory / f"{program}_x86"
+    elf = artifact_directory / f"{program}.elf"
+    link_map = artifact_directory / f"{program}.map"
+    dump = artifact_directory / f"{program}_dump_real.asm"
+    assembly = artifact_directory / f"{program}_program.asm"
+    memory = artifact_directory / f"{program}_instructions.mem"
 
     native_cc = config.get("tools.native_cc.command")
     riscv_cc = config.get("tools.riscv_gcc.command")
@@ -193,8 +220,13 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
 
     return [
         {
+            "name": f"{prefix}:clean",
+            "actions": [(clean_program_artifacts, [paths.build_root, artifact_directory])],
+            "uptodate": [False],
+        },
+        {
             "name": x86_build_name,
-            "actions": [(_run_command, [native_command])],
+            "actions": [(_run_command, [native_command, artifact_directory])],
             "file_dep": [str(source), *(str(path) for path in header_dependencies)],
             "targets": [str(native_executable)],
             "uptodate": [config_changed({"num_cores": num_cores})],
@@ -208,7 +240,7 @@ def _program_tasks(config: ResolvedConfig, program: str) -> list[dict[str, Any]]
         },
         {
             "name": elf_name,
-            "actions": [(_run_command, [elf_command])],
+            "actions": [(_run_command, [elf_command, artifact_directory])],
             "file_dep": [
                 str(source),
                 str(linker_script),

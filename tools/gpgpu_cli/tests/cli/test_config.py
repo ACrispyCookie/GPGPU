@@ -23,7 +23,8 @@ tools:
     command: make
     required: true
 paths:
-  build: build
+  build:
+    root: build
 nested:
   keep: profile
   replace: profile
@@ -95,10 +96,30 @@ def test_missing_and_invalid_profiles_fail_clearly(tmp_path: Path) -> None:
         resolve_config(repo, profile="../outside")
 
 
-def test_repo_path_resolves_relative_paths_against_repository(tmp_path: Path) -> None:
+def test_build_root_resolves_relative_paths_against_repository(tmp_path: Path) -> None:
     resolved = resolve_config(make_repo(tmp_path), profile="default")
 
-    assert resolved.repo_path("paths.build") == (tmp_path / "build").resolve()
+    assert resolved.build_root == (tmp_path / "build").resolve()
+
+
+@pytest.mark.parametrize(
+    "unsafe_root",
+    [".", "..", "software", "software/programs/generated", "tools/output"],
+)
+def test_build_root_rejects_repository_and_source_tree_overlap(
+    tmp_path: Path, unsafe_root: str
+) -> None:
+    resolved = resolve_config(
+        make_repo(tmp_path),
+        profile="default",
+        overrides=[f"paths.build.root={unsafe_root}"],
+    )
+
+    with pytest.raises(ConfigError, match="paths.build.root"):
+        _ = resolved.build_root
+    report = validate_config(resolved)
+    assert not report.valid
+    assert any("paths.build.root" in error for error in report.errors)
 
 
 def test_selected_profile_inherits_default_options_before_cli_overrides(tmp_path: Path) -> None:
@@ -118,18 +139,18 @@ tools:
     resolved = resolve_config(
         repo,
         profile="incomplete",
-        overrides=["paths.build=custom-build"],
+        overrides=["paths.build.root=custom-build"],
     )
     report = validate_config(resolved)
 
     assert resolved.get("architecture.cores") == 16
     assert resolved.get("nested.keep") == "profile"
-    assert resolved.get("paths.build") == "custom-build"
+    assert resolved.get("paths.build.root") == "custom-build"
     assert resolved.source_of("nested.keep").endswith("config/profiles/default.yaml")
     assert resolved.source_of("architecture.cores").endswith(
         "config/profiles/incomplete.yaml"
     )
-    assert resolved.source_of("paths.build") == "cli"
+    assert resolved.source_of("paths.build.root") == "cli"
     assert report.valid
 
 

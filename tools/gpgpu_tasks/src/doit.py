@@ -12,6 +12,8 @@ from doit.cmd_base import TaskLoader2
 from doit.doit_cmd import DoitMain
 from doit.task import Task, dict_to_task
 
+from .project_paths import ProjectPaths
+
 if TYPE_CHECKING:
     from config import ResolvedConfig
 
@@ -43,9 +45,14 @@ class GPGPUTaskLoader(TaskLoader2):
     def load_doit_config(self) -> dict[str, object]:
         """Place pydoit's dependency database in the configured build tree."""
 
-        build_path = self.resolved_config.repo_path("paths.build.root")
+        build_path = ProjectPaths.from_config(self.resolved_config).build_root
         build_path.mkdir(parents=True, exist_ok=True)
-        return {"dep_file": str(build_path / ".doit.db")}
+        # Use an explicit single-file backend so `.doit.db` has identical
+        # semantics on platforms whose dbm implementations add suffixes.
+        return {
+            "dep_file": str(build_path / ".doit.db"),
+            "backend": "sqlite3",
+        }
 
     def load_tasks(self, cmd: object, pos_args: list[str]) -> list[Task]:
         """Load task dictionaries from repository modules and convert them."""

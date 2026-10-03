@@ -29,11 +29,10 @@ from typing import Any, Iterable
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PROGRAMS_DIR = Path(__file__).resolve().parent
-BAREMETAL_DIR = REPO_ROOT / "software" / "host" / "baremetal"
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
-sys.path.insert(0, str(BAREMETAL_DIR))
-
-from gpgpu_uart import GpgpuUartMonitor, read_mem_file  # noqa: E402
+from tools.board.xc7z020.uart import GpgpuUartMonitor, read_mem_file  # noqa: E402
 
 
 # If adapters do:
@@ -95,8 +94,9 @@ class ProgramAdapter:
       - finalize()
     """
 
-    def __init__(self, program_dir: Path):
+    def __init__(self, program_dir: Path, artifact_dir: Path):
         self.program_dir = Path(program_dir)
+        self.artifact_dir = Path(artifact_dir)
 
     # ---------- CLI / setup ----------
 
@@ -114,7 +114,7 @@ class ProgramAdapter:
 
     def imem_path(self) -> Path:
         """Return this program's default instruction-memory image."""
-        return self.program_dir / f"{self.program_dir.name}_instructions.mem"
+        return self.artifact_dir / f"{self.program_dir.name}_instructions.mem"
 
     # ---------- DMEM / run hooks ----------
 
@@ -176,7 +176,8 @@ class ProgramAdapter:
             return
 
         print(f"[INFO] Running visualization: {visualize_script}")
-        subprocess.run([sys.executable, str(visualize_script)], cwd=self.program_dir, check=True)
+        self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        subprocess.run([sys.executable, str(visualize_script)], cwd=self.artifact_dir, check=True)
 
 
 def u32_hex(value: int) -> str:
@@ -252,7 +253,7 @@ def load_dmem_updates(
         uart.load_dmem_bin(words, offset=offset)
 
 
-def load_adapter(program: str) -> ProgramAdapter:
+def load_adapter(program: str, build_root: Path) -> ProgramAdapter:
     adapter_path = PROGRAMS_DIR / program / "fpga.py"
     if not adapter_path.exists():
         raise FileNotFoundError(
@@ -275,7 +276,12 @@ def load_adapter(program: str) -> ProgramAdapter:
             f"{adapter_path} ProgramAdapter must inherit from fpga_run.ProgramAdapter"
         )
 
-    return adapter_cls(program_dir=PROGRAMS_DIR / program)
+    artifact_dir = build_root / "software/programs" / program
+    artifact_dir.mkdir(parents=True, exist_ok=True)
+    return adapter_cls(
+        program_dir=PROGRAMS_DIR / program,
+        artifact_dir=artifact_dir,
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -287,6 +293,12 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--adapter-help", action="store_true", help="Show adapter-specific arguments and exit")
     parser.add_argument("--port", default=None, help="Serial port, e.g. /dev/ttyUSB1")
     parser.add_argument("--baud", type=int, default=115200, help="UART baud rate")
+    parser.add_argument(
+        "--build-root",
+        type=Path,
+        default=REPO_ROOT / "build",
+        help="Generated-artifact root (default: repository build/)",
+    )
     parser.add_argument("--kernel-calls", type=int, default=1, help="Number of kernel launches")
     parser.add_argument("--imem", type=Path, default=None, help="Override IMEM .mem file path")
     parser.add_argument("--imem-offset", type=int, default=0, help="IMEM word offset for program load")
@@ -318,7 +330,11 @@ def parse_args(argv: list[str] | None = None) -> ParsedArgs:
     parser = build_parser()
     generic_args, adapter_argv = parser.parse_known_args(argv)
 
-    adapter = load_adapter(generic_args.program)
+    build_root = generic_args.build_root.expanduser()
+    if not build_root.is_absolute():
+        build_root = REPO_ROOT / build_root
+    generic_args.build_root = build_root.resolve()
+    adapter = load_adapter(generic_args.program, generic_args.build_root)
     adapter_parser = build_adapter_parser(generic_args.program, adapter)
 
     if generic_args.adapter_help:

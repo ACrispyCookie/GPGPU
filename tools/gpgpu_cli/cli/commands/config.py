@@ -40,16 +40,31 @@ def get(
     ctx: typer.Context,
     key: str = typer.Argument(..., help="Dotted configuration key."),
     source: bool = typer.Option(False, "--source", help="Also print the winning layer."),
+    resolved_path: bool = typer.Option(
+        False,
+        "--resolved-path",
+        help="Print paths.build.root as an absolute filesystem path.",
+    ),
 ) -> None:
     """Print one resolved value."""
 
     config: ResolvedConfig = ctx.obj
-    try:
-        value: Any = config.get(key)
-    except ConfigError as exc:
-        raise typer.BadParameter(str(exc)) from exc
-    rendered = yaml.safe_dump(plain(value), sort_keys=False).strip()
-    rendered = "\n".join(line for line in rendered.splitlines() if line != "...")
+    if resolved_path:
+        if key != "paths.build.root":
+            raise typer.BadParameter(
+                "--resolved-path is only supported for paths.build.root"
+            )
+        try:
+            rendered = str(config.build_root)
+        except ConfigError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+    else:
+        try:
+            value: Any = config.get(key)
+        except ConfigError as exc:
+            raise typer.BadParameter(str(exc)) from exc
+        rendered = yaml.safe_dump(plain(value), sort_keys=False).strip()
+        rendered = "\n".join(line for line in rendered.splitlines() if line != "...")
     typer.echo(rendered)
     if source:
         try:

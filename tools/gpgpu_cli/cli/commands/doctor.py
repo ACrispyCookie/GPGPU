@@ -10,11 +10,8 @@ from rich.table import Table
 import typer
 
 from config import ConfigError, ResolvedConfig, validate_config
+from src.project_paths import ProjectPaths
 from .common import display_path, print_summary
-
-
-def _is_generated_path(key: str, generated_roots: tuple[str, ...]) -> bool:
-    return any(key == root or key.startswith(f"{root}.") for root in generated_roots)
 
 
 def doctor(ctx: typer.Context) -> None:
@@ -74,29 +71,33 @@ def doctor(ctx: typer.Context) -> None:
             status = "[yellow]MISSING (optional)[/yellow]"
         table.add_row(str(name), command, status)
 
-    configured_generated_paths = config.get("doctor.generated_paths", ())
-    generated_paths = (
-        tuple(item for item in configured_generated_paths if isinstance(item, str))
-        if isinstance(configured_generated_paths, tuple)
-        else ()
-    )
-
     try:
-        configured_paths = config.repo_paths()
-    except ConfigError as exc:
+        paths = ProjectPaths.from_config(config)
+    except (ConfigError, ValueError) as exc:
         errors.append(str(exc))
     else:
-        for key, path in configured_paths.items():
-            exists = path.exists()
-            generated = _is_generated_path(key, generated_paths)
-            if exists:
+        for key, path in paths.required_repository_paths().items():
+            if path.is_dir():
                 status = "[green]OK[/green]"
-            elif generated:
-                status = "[blue]NOT BUILT[/blue]"
+            elif path.exists():
+                status = "[red]NOT A DIRECTORY[/red]"
+                errors.append(f"Repository path is not a directory: {key} ({path})")
             else:
                 status = "[red]MISSING[/red]"
                 errors.append(f"Repository path is missing: {key} ({path})")
             table.add_row(key, display_path(str(path), config.repo_root), status)
+        if paths.build_root.is_dir():
+            build_status = "[green]OK[/green]"
+        elif paths.build_root.exists():
+            build_status = "[red]NOT A DIRECTORY[/red]"
+            errors.append(f"Build root is not a directory: {paths.build_root}")
+        else:
+            build_status = "[blue]NOT BUILT[/blue]"
+        table.add_row(
+            "paths.build.root",
+            display_path(str(paths.build_root), config.repo_root),
+            build_status,
+        )
 
     console.print(table)
     print_summary(console, errors, warnings)

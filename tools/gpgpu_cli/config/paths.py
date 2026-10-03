@@ -1,12 +1,10 @@
-"""Repository discovery and recursive configured-path resolution."""
+"""Repository discovery and single build-root resolution."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
 import subprocess
-from types import MappingProxyType
-from typing import Any
 
 
 class RepoNotFoundError(RuntimeError):
@@ -17,48 +15,57 @@ class PathResolutionError(ValueError):
     """Raised when the configured path tree has an invalid shape or key."""
 
 
+_PROTECTED_REPOSITORY_DIRECTORIES = (
+    ".git",
+    "config",
+    "demo",
+    "docs",
+    "hardware",
+    "software",
+    "tests",
+    "tools",
+)
+
+
 def _append_path(base: Path, raw: str) -> Path:
     component = Path(raw).expanduser()
     return (component if component.is_absolute() else base / component).resolve()
 
 
-def resolve_repo_paths(repo_root: Path, configured: object) -> Mapping[str, Path]:
-    """Resolve all entries in ``paths``, accumulating nested section roots."""
+def _contains(parent: Path, child: Path) -> bool:
+    return parent == child or parent in child.parents
+
+
+def _validate_build_root(repo_root: Path, build_root: Path) -> None:
+    repository = repo_root.resolve()
+    if _contains(build_root, repository):
+        raise PathResolutionError(
+            "paths.build.root must not be the repository root or one of its ancestors"
+        )
+
+    for relative in _PROTECTED_REPOSITORY_DIRECTORIES:
+        protected = repository / relative
+        if _contains(protected, build_root) or _contains(build_root, protected):
+            raise PathResolutionError(
+                "paths.build.root overlaps protected repository directory: "
+                f"{protected}"
+            )
+
+
+def resolve_build_root(repo_root: Path, configured: object) -> Path:
+    """Resolve the sole configurable path: ``paths.build.root``."""
 
     if not isinstance(configured, Mapping):
         raise PathResolutionError("paths must be a mapping")
-
-    resolved: dict[str, Path] = {}
-
-    def walk(section: Mapping[str, Any], base: Path, prefix: str) -> None:
-        for key, value in section.items():
-            dotted = f"{prefix}.{key}"
-            if isinstance(value, str):
-                resolved[dotted] = _append_path(base, value)
-                continue
-            if not isinstance(value, Mapping):
-                raise PathResolutionError(f"{dotted} must be a string or mapping")
-
-            root = value.get("root")
-            if not isinstance(root, str):
-                raise PathResolutionError(f"{dotted} must define a string root")
-            section_base = _append_path(base, root)
-            resolved[f"{dotted}.root"] = section_base
-            children = {child: item for child, item in value.items() if child != "root"}
-            walk(children, section_base, dotted)
-
-    walk(configured, repo_root, "paths")
-    return MappingProxyType(resolved)
-
-
-def resolve_repo_path(repo_root: Path, configured: object, dotted_key: str) -> Path:
-    """Resolve one dotted key from the configured ``paths`` tree."""
-
-    paths = resolve_repo_paths(repo_root, configured)
-    try:
-        return paths[dotted_key]
-    except KeyError as exc:
-        raise PathResolutionError(f"Unknown path configuration option: {dotted_key}") from exc
+    build = configured.get("build")
+    if not isinstance(build, Mapping):
+        raise PathResolutionError("paths.build must be a mapping")
+    raw = build.get("root")
+    if not isinstance(raw, str) or not raw:
+        raise PathResolutionError("paths.build.root must be a non-empty string")
+    resolved = _append_path(repo_root, raw)
+    _validate_build_root(repo_root, resolved)
+    return resolved
 
 
 def find_repo_root(start: str | Path | None = None) -> Path:

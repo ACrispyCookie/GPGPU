@@ -5,10 +5,14 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BAREMETAL_DIR = REPO_ROOT / "software" / "host" / "baremetal"
-sys.path.insert(0, str(BAREMETAL_DIR))
+sys.path.insert(0, str(REPO_ROOT))
 
-from gpgpu_uart import DEPTH, GpgpuUartMonitor as GpgpuUart, read_mem_file, trim_program_at_ret
+from tools.board.xc7z020.uart import (  # noqa: E402
+    DEPTH,
+    GpgpuUartMonitor as GpgpuUart,
+    read_mem_file,
+    trim_program_at_ret,
+)
 
 
 def discover_tests(tests_root: Path):

@@ -2,8 +2,12 @@
 # The ./gpgpu launcher creates config/local.yaml automatically on first use.
 #
 # Example:
-# serial:
-#   port: /dev/ttyUSB1
+# hardware:
+#   serial:
+#     port: /dev/ttyUSB1
+# paths:
+#   build:
+#     root: /mnt/fast/gpgpu-build
 # tools:
 #   vivado:
 #     command: /opt/Xilinx/Vivado/2025.2/bin/vivado

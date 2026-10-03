@@ -12,8 +12,8 @@ class StubResolvedConfig:
         self.repo_root = repo_root
         self.build_path = build_path
 
-    def repo_path(self, key: str) -> Path:
-        assert key == "paths.build.root"
+    @property
+    def build_root(self) -> Path:
         return self.build_path
 
 
@@ -48,6 +48,7 @@ def test_loader_stores_resolved_config_and_configures_dep_file(tmp_path: Path) -
     assert loader.resolved_config is config
     assert loader.load_doit_config() == {
         "dep_file": str(tmp_path / "build/.doit.db"),
+        "backend": "sqlite3",
     }
     assert (tmp_path / "build").is_dir()
     assert [task.name for task in loader.load_tasks(cmd=None, pos_args=[])] == [

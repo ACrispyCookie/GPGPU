@@ -9,13 +9,13 @@ from tools.software import programs
 
 
 class StubResolvedConfig:
-    def __init__(self, repo_root: Path) -> None:
+    def __init__(self, repo_root: Path, build_root: Path | None = None) -> None:
         self.repo_root = repo_root
+        self._build_root = build_root or repo_root / "build"
 
     def get(self, key: str):
         values = {
             "architecture.num_cores": 8,
-            "paths.software.programs": "programs",
             "software.riscv.march": "rv32im",
             "software.riscv.abi": "ilp32",
             "tools.native_cc.command": "gcc",
@@ -23,12 +23,12 @@ class StubResolvedConfig:
         }
         return values[key]
 
-    def repo_path(self, key: str) -> Path:
-        assert key == "paths.software.root"
-        return self.repo_root / "software"
+    @property
+    def build_root(self) -> Path:
+        return self._build_root
 
 
-def make_repo(tmp_path: Path) -> StubResolvedConfig:
+def make_repo(tmp_path: Path, build_root: Path | None = None) -> StubResolvedConfig:
     programs_dir = tmp_path / "software/programs"
     program_dir = programs_dir / "example"
     program_dir.mkdir(parents=True)
@@ -36,7 +36,7 @@ def make_repo(tmp_path: Path) -> StubResolvedConfig:
     (programs_dir / "gpgpu.ld").write_text("SECTIONS {}\n")
     (programs_dir / "gpgpu_config.h").write_text("#define GPGPU_NUM_CORES 32u\n")
     (programs_dir / "gpgpu_runtime.h").write_text('#include "gpgpu_config.h"\n')
-    return StubResolvedConfig(tmp_path)
+    return StubResolvedConfig(tmp_path, build_root)
 
 
 def tasks_by_name(config: StubResolvedConfig) -> dict[str, dict]:
@@ -49,6 +49,7 @@ def test_create_tasks_preserves_makefile_build_graph_and_flags(tmp_path: Path) -
     prefix = "software:programs:example"
 
     assert set(tasks) == {
+        f"{prefix}:clean",
         f"{prefix}:x86:build",
         f"{prefix}:x86",
         f"{prefix}:elf",
@@ -65,7 +66,7 @@ def test_create_tasks_preserves_makefile_build_graph_and_flags(tmp_path: Path) -
         "-O2",
         "-DGPGPU_NUM_CORES=8",
         "-o",
-        str(tmp_path / "software/programs/example/example_x86"),
+        str(tmp_path / "build/software/programs/example/example_x86"),
         str(tmp_path / "software/programs/example/example.c"),
     ]
 
@@ -77,7 +78,22 @@ def test_create_tasks_preserves_makefile_build_graph_and_flags(tmp_path: Path) -
     assert "-ffixed-x31" in elf_command
     assert "-mno-relax" in elf_command
     assert f"-Wl,-T,{tmp_path / 'software/programs/gpgpu.ld'}" in elf_command
-    assert f"-Wl,-Map,{tmp_path / 'software/programs/example/example.map'}" in elf_command
+    assert f"-Wl,-Map,{tmp_path / 'build/software/programs/example/example.map'}" in elf_command
+
+    expected_targets = {
+        tmp_path / "build/software/programs/example/example_x86",
+        tmp_path / "build/software/programs/example/example.elf",
+        tmp_path / "build/software/programs/example/example.map",
+        tmp_path / "build/software/programs/example/example_dump_real.asm",
+        tmp_path / "build/software/programs/example/example_program.asm",
+        tmp_path / "build/software/programs/example/example_instructions.mem",
+    }
+    actual_targets = {
+        Path(target)
+        for task in tasks.values()
+        for target in task.get("targets", [])
+    }
+    assert expected_targets <= actual_targets
 
     for task_name in (f"{prefix}:x86:build", f"{prefix}:elf"):
         fingerprint = tasks[task_name]["uptodate"][0]
@@ -134,9 +150,27 @@ def test_non_program_directories_are_ignored(tmp_path: Path) -> None:
     assert all("not-a-program" not in name for name in names)
 
 
+def test_clean_task_refuses_symlink_escape_from_build_root(tmp_path: Path) -> None:
+    config = make_repo(tmp_path)
+    source_program = tmp_path / "software/programs/example"
+    marker = source_program / "keep.c"
+    marker.write_text("keep\n", encoding="utf-8")
+    build_root = tmp_path / "build"
+    build_root.mkdir()
+    (build_root / "software").symlink_to(tmp_path / "software", target_is_directory=True)
+
+    clean_task = tasks_by_name(config)["software:programs:example:clean"]
+    action, arguments = clean_task["actions"][0]
+
+    with pytest.raises(RuntimeError, match="symbolic link"):
+        action(*arguments)
+    assert marker.read_text(encoding="utf-8") == "keep\n"
+
+
 @pytest.mark.skipif(shutil.which("gcc") is None, reason="gcc is not installed")
 def test_x86_task_builds_and_runs_the_native_executable(tmp_path: Path) -> None:
-    config = make_repo(tmp_path)
+    external_build = tmp_path / "external-output"
+    config = make_repo(tmp_path, external_build)
     marker = tmp_path / "executed.txt"
     source = tmp_path / "software/programs/example/example.c"
     source.write_text(
@@ -158,8 +192,9 @@ def test_x86_task_builds_and_runs_the_native_executable(tmp_path: Path) -> None:
     run_action, run_arguments = run_task["actions"][0]
     run_action(*run_arguments)
 
-    executable = tmp_path / "software/programs/example/example_x86"
+    executable = external_build / "software/programs/example/example_x86"
     assert executable.is_file()
+    assert not (tmp_path / "software/programs/example/example_x86").exists()
     assert executable.stat().st_mode & 0o111
     assert run_task["task_dep"] == ["software:programs:example:x86:build"]
     assert run_task["uptodate"] == [False]

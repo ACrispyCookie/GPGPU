@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """Python UART client for the baremetal GPGPU host monitor.
 
-This module intentionally mirrors the command surface printed by
-software/host/baremetal/main.c so demo/test scripts do not need to hardcode UART
+This module intentionally mirrors the command surface implemented by
+software/host/xc7z020/main.c so demo/test scripts do not need to hardcode UART
 protocol details independently.
 """
 

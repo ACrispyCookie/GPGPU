@@ -11,7 +11,7 @@ import re
 
 import yaml
 
-from .paths import PathResolutionError, resolve_repo_path, resolve_repo_paths
+from .paths import PathResolutionError, resolve_build_root
 
 
 _PROFILE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
@@ -140,19 +140,12 @@ class ResolvedConfig:
         except KeyError as exc:
             raise ConfigError(f"No source recorded for configuration option: {dotted_key}") from exc
 
-    def repo_path(self, dotted_key: str) -> Path:
-        """Return one recursively resolved entry from the ``paths`` section."""
+    @property
+    def build_root(self) -> Path:
+        """Return the sole configured output root resolved against the checkout."""
 
         try:
-            return resolve_repo_path(self.repo_root, self.get("paths"), dotted_key)
-        except PathResolutionError as exc:
-            raise ConfigError(str(exc)) from exc
-
-    def repo_paths(self) -> Mapping[str, Path]:
-        """Resolve every path, accumulating each containing section's root."""
-
-        try:
-            return resolve_repo_paths(self.repo_root, self.get("paths"))
+            return resolve_build_root(self.repo_root, self.get("paths"))
         except PathResolutionError as exc:
             raise ConfigError(str(exc)) from exc
 
@@ -243,6 +236,10 @@ def validate_config(config: ResolvedConfig) -> ConfigValidationReport:
     errors: list[str] = []
     warnings: list[str] = []
     _validate_options(expected, config.values, "", errors, warnings)
+    try:
+        _ = config.build_root
+    except ConfigError as exc:
+        errors.append(str(exc))
     return ConfigValidationReport(tuple(errors), tuple(warnings))
 
 

@@ -137,18 +137,31 @@ the Tcl is up to date. The comparison is content-based rather than timestamp-
 based.
 
 The task exports the project managed by this CLI. It does not guess or discover
-unrelated Vivado projects elsewhere on the machine. To import the current
-legacy `/workspace/GPU/GPU.xpr` project once, override only the configured
-Vivado project parent:
+unrelated Vivado projects elsewhere on the machine. `paths.build.root` is the
+only configurable filesystem path. All generated paths are derived from it, so
+a one-off external build root is selected with:
 
 ```bash
-./gpgpu --set paths.build.hardware.vivado=/workspace \
-  run vivado:export-block-design
+./gpgpu --set paths.build.root=/workspace/gpgpu-build run vivado:all
 ```
 
-The project name remains the configured `GPU`, so the resolved project is
-`/workspace/GPU/GPU.xpr`. Normal operation should use the generated project
-under `build/`.
+This places the managed project at
+`/workspace/gpgpu-build/hardware/vivado/GPU/GPU.xpr`, software program outputs
+under `/workspace/gpgpu-build/software/programs/<program>/`, RTL test outputs
+under `/workspace/gpgpu-build/tests/rtl/`, and the doit database at
+`/workspace/gpgpu-build/.doit.db`. Source paths such as `hardware/rtl`,
+`hardware/constraints`, `software/programs`, and `tests/` are fixed parts of the
+repository layout and are not independently configurable. Scripts can obtain
+the normalized absolute root without parsing YAML:
+
+```bash
+./gpgpu config get paths.build.root --resolved-path
+```
+
+For safety, the resolved build root cannot be the repository root, one of its
+ancestors, or overlap `config/`, `demo/`, `docs/`, `hardware/`, `software/`,
+`tests/`, `tools/`, or `.git/`. This prevents clean operations and generated
+files from modifying source or repository metadata.
 
 Generated project state is written to `build/hardware/vivado/GPU/`. The final
 outputs are:

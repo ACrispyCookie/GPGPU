@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import typer
 
-from config import ResolvedConfig
+from config import ConfigError, ResolvedConfig
 from src import run as run_doit
 
 
@@ -88,6 +88,10 @@ def run(
     """Run one task and all of its dependencies from the GPGPU build graph."""
 
     config: ResolvedConfig = ctx.obj
+    try:
+        _ = config.build_root
+    except ConfigError as exc:
+        raise typer.BadParameter(str(exc)) from exc
     status = run_doit(config, ["run", task])
     if status:
         raise typer.Exit(status)

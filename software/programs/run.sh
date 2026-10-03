@@ -4,6 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROGRAMS_DIR="$SCRIPT_DIR"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+GPGPU="$REPO_ROOT/gpgpu"
+BUILD_ROOT="$("$GPGPU" config get paths.build.root --resolved-path)"
 
 mapfile -t PROGRAMS < <(
     find "$PROGRAMS_DIR" -mindepth 1 -maxdepth 1 -type d ! -name '__pycache__' \
@@ -213,8 +216,9 @@ if [[ "$VALID" -eq 0 ]]; then
 fi
 
 PROGRAM_DIR="$PROGRAMS_DIR/$SELECTED"
-X86_EXE="$PROGRAM_DIR/${SELECTED}_x86"
-DATA_CSV="$PROGRAM_DIR/data.csv"
+PROGRAM_BUILD_DIR="$BUILD_ROOT/software/programs/$SELECTED"
+X86_EXE="$PROGRAM_BUILD_DIR/${SELECTED}_x86"
+DATA_CSV="$PROGRAM_BUILD_DIR/data.csv"
 VISUALIZE_SCRIPT="$PROGRAM_DIR/visualize.py"
 
 if [[ "$TARGET" == "clean" ]]; then
@@ -276,11 +280,23 @@ echo "Visualize    : $VISUALIZE"
 echo "=========================================="
 echo ""
 
-make -C "$PROGRAMS_DIR" PROG="$SELECTED" clean
-make -C "$PROGRAMS_DIR" PROG="$SELECTED" "$TARGET"
+case "$TARGET" in
+    clean)
+        "$GPGPU" run "software:programs:$SELECTED:clean"
+        ;;
+    x86)
+        "$GPGPU" run "software:programs:$SELECTED:x86:build"
+        ;;
+    riscv)
+        "$GPGPU" run "software:programs:$SELECTED:riscv:build"
+        ;;
+    all)
+        "$GPGPU" run "software:programs:$SELECTED:all"
+        ;;
+esac
 
 if [[ "$RUN_FPGA" -eq 1 ]]; then
-    make -C "$PROGRAMS_DIR" PROG="$SELECTED" "$SELECTED/${SELECTED}_instructions.mem"
+    "$GPGPU" run "software:programs:$SELECTED:mem"
 fi
 
 if [[ "$RUN_X86" -eq 1 ]]; then
@@ -299,6 +315,7 @@ fi
 if [[ "$RUN_FPGA" -eq 1 ]]; then
     FPGA_ARGS=(
         --program "$SELECTED"
+        --build-root "$BUILD_ROOT"
         --port "$FPGA_PORT"
         --baud "$FPGA_BAUD"
         --kernel-calls "${FPGA_KERNEL_CALLS:-1}"
@@ -326,8 +343,8 @@ if [[ "$VISUALIZE" -eq 1 && "$RUN_FPGA" -eq 0 ]]; then
         echo ""
         echo "Running visualization: $VISUALIZE_SCRIPT"
         (
-            cd "$PROGRAM_DIR"
-            python3 visualize.py
+            cd "$PROGRAM_BUILD_DIR"
+            python3 "$VISUALIZE_SCRIPT"
         )
     else
         echo ""

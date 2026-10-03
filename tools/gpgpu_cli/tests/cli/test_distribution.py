@@ -24,9 +24,7 @@ def test_repository_has_default_profile_and_local_override_template() -> None:
     template_path = REPO_ROOT / "config/local.yaml.example"
 
     profile = yaml.safe_load(profile_path.read_text(encoding="utf-8"))
-    assert profile["paths"]["hardware"]["root"] == "hardware"
-    assert profile["paths"]["hardware"]["rtl"] == "rtl"
-    assert profile["paths"]["hardware"]["constraints"] == "constraints"
+    assert profile["paths"] == {"build": {"root": "build"}}
     assert profile["hardware"]["vivado"]["project_name"] == "GPU"
     assert profile["hardware"]["vivado"]["bd_name"] == "gpgpu_block_design"
     assert profile["hardware"]["vivado"]["top"] == "gpgpu_block_design_wrapper"
@@ -40,7 +38,6 @@ def test_repository_has_default_profile_and_local_override_template() -> None:
         "wdata_gpio": "0x41240000",
     }
     assert "host_interface" not in profile
-    assert profile["paths"]["build"]["hardware"]["platform"] == "platform"
     assert profile["tools"]["vivado"]["required"] is False
     assert profile["tests"]["rtl"]["random"]["iterations"] == 100
     assert profile["tests"]["rtl"]["random"]["seed"] == 0

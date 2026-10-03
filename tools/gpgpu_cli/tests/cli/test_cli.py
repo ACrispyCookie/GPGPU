@@ -21,7 +21,8 @@ def make_repo(tmp_path: Path) -> Path:
 project:
   name: test-gpgpu
 paths:
-  build: build
+  build:
+    root: build
 tools:
   python:
     command: python3
@@ -32,6 +33,15 @@ tools:
 """,
         encoding="utf-8",
     )
+    for relative in (
+        "hardware/rtl",
+        "hardware/constraints",
+        "software/host",
+        "software/programs",
+        "tests/hardware/rtl",
+        "demo",
+    ):
+        (tmp_path / relative).mkdir(parents=True)
     return tmp_path
 
 
@@ -61,6 +71,19 @@ def test_config_get_reports_value_and_source(tmp_path: Path) -> None:
     assert "config/profiles/default.yaml" in result.stdout
 
 
+def test_config_get_resolves_build_root_for_external_consumers(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    app = create_app(repo_root=repo)
+
+    result = runner.invoke(
+        app,
+        ["--set", "paths.build.root=external-build", "config", "get", "paths.build.root", "--resolved-path"],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert result.stdout.strip() == str((repo / "external-build").resolve())
+
+
 def test_doctor_distinguishes_required_and_optional_tools(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
     app = create_app(repo_root=repo)
@@ -71,6 +94,8 @@ def test_doctor_distinguishes_required_and_optional_tools(tmp_path: Path) -> Non
     assert "python" in result.stdout
     assert "optional_missing" in result.stdout
     assert "MISSING (optional)" in result.stdout
+    assert "paths.build.root" in result.stdout
+    assert "NOT BUILT" in result.stdout
     assert "Errors: 0" in result.stdout
     assert "Warnings: 1" in result.stdout
 
@@ -117,19 +142,35 @@ def test_callback_fails_immediately_on_config_parse_error(tmp_path: Path) -> Non
 
 def test_doctor_counts_missing_required_repository_paths_as_errors(tmp_path: Path) -> None:
     repo = make_repo(tmp_path)
-    profile = repo / "config/profiles/default.yaml"
-    profile.write_text(
-        profile.read_text(encoding="utf-8")
-        + "\npaths:\n  build: build\n  hardware:\n    rtl: missing-rtl\n",
-        encoding="utf-8",
-    )
+    (repo / "hardware/rtl").rmdir()
     app = create_app(repo_root=repo)
 
     result = runner.invoke(app, ["doctor"])
 
     assert result.exit_code == 1, result.output
-    assert "Repository path is missing: paths.hardware.rtl" in result.stdout
+    assert "Repository path is missing: repository.hardware.rtl" in result.stdout
     assert "Errors: 1" in result.stdout
+
+
+def test_doctor_rejects_repository_paths_that_are_not_directories(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    (repo / "demo").rmdir()
+    (repo / "demo").write_text("not a directory\n", encoding="utf-8")
+
+    result = runner.invoke(create_app(repo_root=repo), ["doctor"])
+
+    assert result.exit_code == 1, result.output
+    assert "Repository path is not a directory: repository.demo" in result.stdout
+
+
+def test_doctor_rejects_build_root_that_is_not_a_directory(tmp_path: Path) -> None:
+    repo = make_repo(tmp_path)
+    (repo / "build").write_text("not a directory\n", encoding="utf-8")
+
+    result = runner.invoke(create_app(repo_root=repo), ["doctor"])
+
+    assert result.exit_code == 1, result.output
+    assert "Build root is not a directory" in result.stdout
 
 
 def test_run_dispatches_exactly_one_task_with_resolved_config(
@@ -152,6 +193,28 @@ def test_run_dispatches_exactly_one_task_with_resolved_config(
     assert result.exit_code == 0, result.output
     assert captured["arguments"] == ["run", "software:programs:simple:x86"]
     assert captured["config"].profile == "default"  # type: ignore[union-attr]
+
+
+def test_run_rejects_build_root_overlap_before_dispatch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo = make_repo(tmp_path)
+    dispatched = False
+
+    def fake_run(config: object, arguments: list[str]) -> int:
+        nonlocal dispatched
+        dispatched = True
+        return 0
+
+    monkeypatch.setattr(run_command_module, "run_doit", fake_run)
+    result = runner.invoke(
+        create_app(repo_root=repo),
+        ["--set", "paths.build.root=.", "run", "software:programs:simple:x86"],
+    )
+
+    assert result.exit_code != 0, result.output
+    assert "must not be the repository root" in result.output
+    assert not dispatched
 
 
 def test_run_propagates_pydoit_failure_status(

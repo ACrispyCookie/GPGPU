@@ -20,6 +20,8 @@ NATIVE_CFLAGS = -O2
 PROG ?= nbody
 
 DIR = $(PROG)
+BUILD_ROOT ?= ../../build
+OUT_DIR ?= $(BUILD_ROOT)/software/programs/$(PROG)
 
 SRC = $(DIR)/$(PROG).c
 NATIVE_SRC = $(SRC)
@@ -27,23 +29,23 @@ NATIVE_SRC = $(SRC)
 # ==========================================
 # RISC-V Outputs
 # ==========================================
-ELF      = $(DIR)/$(PROG).elf
-MAP      = $(DIR)/$(PROG).map
+ELF      = $(OUT_DIR)/$(PROG).elf
+MAP      = $(OUT_DIR)/$(PROG).map
 
 # Full dump:
 # address + hex + instruction
-DUMP_ASM = $(DIR)/$(PROG)_dump_real.asm
+DUMP_ASM = $(OUT_DIR)/$(PROG)_dump_real.asm
 
 # Clean assembly only
-PROG_ASM = $(DIR)/$(PROG)_program.asm
+PROG_ASM = $(OUT_DIR)/$(PROG)_program.asm
 
 # Raw hex instructions
-MEM      = $(DIR)/$(PROG)_instructions.mem
+MEM      = $(OUT_DIR)/$(PROG)_instructions.mem
 
 # ==========================================
 # Native x86 Output
 # ==========================================
-NATIVE_EXE = $(DIR)/$(PROG)_x86
+NATIVE_EXE = $(OUT_DIR)/$(PROG)_x86
 
 # ==========================================
 # Default target
@@ -56,7 +58,10 @@ x86: $(NATIVE_EXE)
 # ==========================================
 # NATIVE x86 BUILD TARGET
 # ==========================================
-$(NATIVE_EXE): $(NATIVE_SRC)
+$(OUT_DIR):
+	@mkdir -p $@
+
+$(NATIVE_EXE): $(NATIVE_SRC) | $(OUT_DIR)
 	@echo "Compiling $(PROG) for x86 Native Linux..."
 	@$(NATIVE_CC) $(NATIVE_CFLAGS) -o $@ $<
 	@echo "Success! Run it with: ./$@"
@@ -68,7 +73,7 @@ $(NATIVE_EXE): $(NATIVE_SRC)
 # ------------------------------------------
 # Full assembly dump
 # ------------------------------------------
-$(DUMP_ASM): $(ELF)
+$(DUMP_ASM): $(ELF) | $(OUT_DIR)
 	@echo "Generating full assembly dump..."
 	@$(OBJDUMP) -d -M no-aliases,numeric $< > $@
 
@@ -82,7 +87,7 @@ $(DUMP_ASM): $(ELF)
 # ------------------------------------------
 # Clean assembly only
 # ------------------------------------------
-$(PROG_ASM): $(DUMP_ASM)
+$(PROG_ASM): $(DUMP_ASM) | $(OUT_DIR)
 	@echo "Generating clean assembly listing..."
 
 	@awk '/^[[:space:]]*[0-9a-fA-F]+:/ { \
@@ -97,7 +102,7 @@ $(PROG_ASM): $(DUMP_ASM)
 # ------------------------------------------
 # Create memory initialization file
 # ------------------------------------------
-$(MEM): $(DUMP_ASM)
+$(MEM): $(DUMP_ASM) | $(OUT_DIR)
 	@echo "Filtering and creating Memory File..."
 
 	@awk '/^[[:space:]]*[0-9a-fA-F]+:/ { \
@@ -113,7 +118,7 @@ $(MEM): $(DUMP_ASM)
 # ==========================================
 # Compile C -> ELF
 # ==========================================
-$(ELF): $(SRC) $(LINKER_SCRIPT)
+$(ELF): $(SRC) $(LINKER_SCRIPT) | $(OUT_DIR)
 	@echo "Compiling $(PROG) for RISC-V..."
 	@$(CC) $(CFLAGS) -o $@ $< $(LDFLAGS)
 
@@ -130,6 +135,7 @@ clean:
 		$(PROG_ASM) \
 		$(MEM) \
 		$(NATIVE_EXE)
+	@rmdir $(OUT_DIR) 2>/dev/null || true
 
 # ==========================================
 # Phony targets

@@ -5,10 +5,9 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
-BAREMETAL_DIR = REPO_ROOT / "software" / "host" / "baremetal"
-sys.path.insert(0, str(BAREMETAL_DIR))
+sys.path.insert(0, str(REPO_ROOT))
 
-from gpgpu_uart import (
+from tools.board.xc7z020.uart import (  # noqa: E402
     DEPTH,
     GpgpuUartMonitor,
     normalize_word,

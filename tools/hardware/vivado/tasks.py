@@ -10,6 +10,7 @@ import sys
 from typing import TYPE_CHECKING, Any, TextIO
 
 from doit.tools import config_changed
+from src.project_paths import ProjectPaths
 
 if TYPE_CHECKING:
     from config import ResolvedConfig
@@ -239,12 +240,13 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create the staged Vivado project, bitstream, and hardware-platform tasks."""
 
     repo_root = config.repo_root
+    paths = ProjectPaths.from_config(config)
     scripts = repo_root / "tools/hardware/vivado"
-    rtl_root = config.repo_path("paths.hardware.rtl")
-    constraints_root = config.repo_path("paths.hardware.constraints")
-    vivado_build_root = config.repo_path("paths.build.hardware.vivado")
-    bitstream_root = config.repo_path("paths.build.hardware.bitstream")
-    platform_root = config.repo_path("paths.build.hardware.platform")
+    rtl_root = paths.hardware_rtl
+    constraints_root = paths.hardware_constraints
+    vivado_build_root = paths.vivado
+    bitstream_root = paths.bitstream
+    platform_root = paths.platform
 
     vivado_command = _string(config, "tools.vivado.command")
     project_name = _string(config, "hardware.vivado.project_name")
