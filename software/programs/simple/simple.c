@@ -3,22 +3,24 @@
 #define CORES GPGPU_NUM_CORES
 
 #ifdef __riscv
-int indexes_array[CORES] = {0};
-int ten_array[CORES] = {0};
 
 #include "../gpgpu_runtime.h"
 
-__attribute__((noinline, used, patchable_function_entry(1, 0)))
 void main(void)
 {
-    int threadIdx_x;
-    __asm__ volatile("mv %0, x31" : "=r"(threadIdx_x));
+    unsigned int tid = gpgpu_thread_id();
 
-    indexes_array[threadIdx_x] = threadIdx_x;
+    volatile int *base = (volatile int *)(uintptr_t)GPGPU_ARGS[0];
 
-    // Test that all SPs have accessed x and written it to the correct position
+    volatile int indexes_array = base;
+    volatile int ten_array = base + (CORES + 1)
+
+    // All SPs must write their thread id
+    indexes_array[tid] = tid;
+
+    // Αll SPs must access x and write it to their index
     int x = 10;
-    ten_array[threadIdx_x] = x;
+    ten_array[tid] = x;
 
     return;
 }

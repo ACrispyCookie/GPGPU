@@ -35,30 +35,22 @@ int image[WIDTH * HEIGHT] = {
     0,0,0,0,0,0,0,0,255,255,255,255,255,255,255,255
 };
 
-// ======================================================
-// Output Image
-// ======================================================
-
-int output[WIDTH * HEIGHT] = {0};
-
 #ifdef __riscv
 
-__attribute__((naked,noreturn))
-void _start()
+void main(void)
 {
-    int threadIdx_x;
+    unsigned int tid = gpgpu_thread_id();
 
-    __asm__ volatile(
-        "mv %0, x31"
-        : "=r"(threadIdx_x)
-    );
+    volatile int *base = (volatile int *)(uintptr_t)GPGPU_ARGS[0];
+
+    volatile int *output = base;
 
     // ==================================================
     // Flattened pixel index
     // Each SP processes multiple pixels
     // ==================================================
 
-    for (int idx = threadIdx_x; idx < WIDTH * HEIGHT; idx += CORES)
+    for (int idx = tid; idx < WIDTH * HEIGHT; idx += CORES)
     {
         int x = idx % WIDTH;
         int y = idx / WIDTH;
@@ -128,14 +120,10 @@ void _start()
         output[idx] = mag;
     }
 
-    // ==================================================
-    // Return to host
-    // ==================================================
-
-    __asm__ volatile("jalr x0, 0(x1)");
-
-    __builtin_unreachable();
+    return;
 }
+
+GPGPU_START(main)
 
 #else
 

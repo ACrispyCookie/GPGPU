@@ -5,7 +5,7 @@
 
 #ifdef __riscv
 
-void kernel_main(void)
+void main(void)
 {
     unsigned int tid = gpgpu_thread_id();
 
@@ -66,7 +66,7 @@ void kernel_main(void)
     return;
 }
 
-GPGPU_START(kernel_main)
+GPGPU_START(main)
 
 #else
 

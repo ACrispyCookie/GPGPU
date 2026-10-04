@@ -10,7 +10,7 @@
 #define MANDEL_ROW_SHIFT 26
 #define MANDEL_SCALE_MASK ((1u << MANDEL_ROW_SHIFT) - 1u)
 
-void kernel_main(void)
+void main(void)
 {
     unsigned int tid = gpgpu_thread_id();
 
@@ -53,7 +53,7 @@ void kernel_main(void)
     return;
 }
 
-GPGPU_START(kernel_main)
+GPGPU_START(main)
 
 #else
 
