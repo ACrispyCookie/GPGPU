@@ -53,9 +53,9 @@ mapping is `address=0x41200000`, `cmd=0x41210000`, `rdata=0x41220000`,
 
 4) Create ARM application: New Component > Application, name it, for example, `gpgpu_host`, select Platform > `gpgpu_platform`, in the Source Files page select add the sources and select the repo's `software/host/xc7z020/` directory.
 
-5) Select VITIS COMPONENTS > `gpgpu_host`, FLOW > select `gpgpu_host` > Build.
+5) Select VITIS COMPONENTS > `gpgpu_platform`, FLOW > select `gpgpu_platform` > Build.
 
-6) Select VITIS COMPONENTS > `gpgpu_platform`, FLOW > select `gpgpu_platform` > Build.
+6) Select VITIS COMPONENTS > `gpgpu_host`, FLOW > select `gpgpu_host` > Build.
 
 Or, using the cli:
 
@@ -79,10 +79,26 @@ portable default:
 The expected programming artifacts are:
 
 ```text
-build/software/vitis/gpgpu_platform/export/gpgpu_platform/hw/sdt/gpgpu_platform.bit
+build/hardware/bitstream/gpgpu_block_design_wrapper.bit
 build/software/vitis/gpgpu_platform/export/gpgpu_platform/hw/sdt/ps7_init.tcl
 build/software/vitis/gpgpu_host/build/gpgpu_host.elf
 ```
+
+The `.bit` is the Vivado-published artifact, not a standalone file under the
+Vitis platform export's `hw/sdt` directory.
+
+## Upload to the board-connected machine
+
+After building, transfer the three artifacts with:
+
+```bash
+./gpgpu run fpga:upload
+```
+
+The upload preserves the remote filenames `gpgpu_platform.bit`, `ps7_init.tcl`,
+and `gpgpu_host.elf` used by the manual programming workflow. It does not rebuild
+or program the board. See [FPGA CLI flow](fpga-cli.md) for SSH configuration,
+prerequisites, and the local-to-remote artifact mapping.
 
 See [Vitis CLI flow](vitis-cli.md) for configuration, individual build stages,
 and export portability guarantees.

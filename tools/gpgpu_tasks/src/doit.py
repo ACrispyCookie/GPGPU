@@ -25,6 +25,7 @@ _TASK_MODULES = (
     "tools/tests/rtl.py",
     "tools/hardware/vivado/tasks.py",
     "tools/hardware/vitis/tasks.py",
+    "tools/hardware/fpga/tasks.py",
 )
 
 

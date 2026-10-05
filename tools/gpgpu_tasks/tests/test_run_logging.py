@@ -47,6 +47,7 @@ def make_task_repo(tmp_path: Path) -> StubResolvedConfig:
         "tools/tests/rtl.py",
         "tools/hardware/vivado/tasks.py",
         "tools/hardware/vitis/tasks.py",
+        "tools/hardware/fpga/tasks.py",
     ):
         module = tmp_path / relative_path
         module.parent.mkdir(parents=True, exist_ok=True)

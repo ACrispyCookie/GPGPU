@@ -104,6 +104,14 @@ build/software/vitis/gpgpu_host/build/gpgpu_host.elf
 
 The platform build always precedes the host build because the application consumes the exported standalone platform domain and BSP.
 
+The programming bitstream is published separately by Vivado at
+`build/hardware/bitstream/gpgpu_block_design_wrapper.bit`. The Vitis platform
+export does not provide a standalone `hw/sdt/gpgpu_platform.bit` in this flow;
+its XSA includes the bitstream. Use the Vivado-published `.bit`, the exported
+`ps7_init.tcl`, and the host ELF for board programming. See
+[FPGA upload](fpga-cli.md) for transferring these three files to the
+board-connected machine without rebuilding or programming the board.
+
 ### Portable BSP directory initialization and recovery
 
 Before calling the Vitis component build API, the CLI discovers BSP roots from

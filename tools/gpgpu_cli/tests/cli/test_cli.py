@@ -276,6 +276,24 @@ def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> No
     assert "dependency chain" in result.stdout
 
 
+def test_run_help_lists_fpga_upload_as_explicit_existing_artifact_operation(tmp_path: Path) -> None:
+    result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "--help"])
+
+    assert result.exit_code == 0
+    assert "FPGA" in result.stdout
+    assert "fpga:upload" in result.stdout
+    assert "without building" in result.stdout
+
+
+def test_vitis_platform_help_describes_xsa_not_bitstream() -> None:
+    help_text = run_command_module._TASK_HELP
+    description = next(line for line in help_text.splitlines() if "`vitis:build:platform`" in line)
+
+    assert "`.xsa`" in description
+    assert "`.bit`" not in description
+    assert "ps7_init.tcl" in description
+
+
 def test_help_exposes_core_commands_and_completion_flags(tmp_path: Path) -> None:
     app = create_app(repo_root=make_repo(tmp_path))
 

@@ -42,6 +42,9 @@ def make_config(tmp_path: Path) -> StubResolvedConfig:
         "    return [{'name': 'vitis:project', 'actions': None}]\n",
         encoding="utf-8",
     )
+    fpga_module = tmp_path / "tools/hardware/fpga/tasks.py"
+    fpga_module.parent.mkdir(parents=True)
+    fpga_module.write_text("def create_tasks(config):\n    return []\n", encoding="utf-8")
     return StubResolvedConfig(tmp_path, tmp_path / "build")
 
 

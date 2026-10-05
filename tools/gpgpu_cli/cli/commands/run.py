@@ -85,13 +85,17 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 
 • `vitis:project` — Materialize the committed portable default project under `build/software/vitis/` and bind it to the current checkout's XSA and host sources. The generated project can be opened and edited in Vitis.
 
-• `vitis:build:platform` — Build `gpgpu_platform` and verify its `.bit` and `ps7_init.tcl` outputs.
+• `vitis:build:platform` — Build `gpgpu_platform` and verify its `.xsa`, `.xpfm`, and `ps7_init.tcl` outputs.
 
 • `vitis:build:host` — Build `gpgpu_host` after the platform and verify `gpgpu_host.elf`.
 
 • `vitis:build:all` — Run the complete Vitis dependency chain through the host ELF.
 
 • `vitis:export` — Explicitly replace the committed default-project archive with a normalized snapshot of the editable generated project. Build products and machine-specific checkout paths are excluded.
+
+[bold cyan]FPGA[/bold cyan]
+
+• `fpga:upload` — SCP the existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM without building. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory` (defaults: `njason@192.168.1.13`, `/home/njason/upload`).
 """
 
 

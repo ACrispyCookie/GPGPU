@@ -4,6 +4,9 @@ architecture:
 hardware:
   fpga:
     part: xc7z020clg484-1
+    upload:
+      destination: njason@192.168.1.13
+      directory: /home/njason/upload
   serial:
     port: /dev/ttyACM0
     baud: 115200
@@ -77,6 +80,9 @@ tools:
     required: false
   vitis:
     command: vitis
+    required: false
+  scp:
+    command: scp
     required: false
   gtkwave:
     command: gtkwave
