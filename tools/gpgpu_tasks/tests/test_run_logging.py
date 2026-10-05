@@ -46,6 +46,7 @@ def make_task_repo(tmp_path: Path) -> StubResolvedConfig:
     for relative_path in (
         "tools/tests/rtl.py",
         "tools/hardware/vivado/tasks.py",
+        "tools/hardware/vitis/tasks.py",
     ):
         module = tmp_path / relative_path
         module.parent.mkdir(parents=True, exist_ok=True)
@@ -120,3 +121,24 @@ def test_successful_run_updates_latest_without_replacing_last_failed(tmp_path: P
     assert "successful output" in (successful_run / "00_stage.log").read_text(
         encoding="utf-8"
     )
+
+
+def test_python_validation_failure_is_visible_in_task_log_and_metadata(tmp_path: Path, capfd) -> None:
+    config = make_task_repo(tmp_path)
+    (tmp_path / "tools/software/programs.py").write_text(
+        "def validate():\n"
+        "    print('Platform Build Finished successfully.', flush=True)\n"
+        "    raise FileNotFoundError('Vitis completed without producing required artifacts: missing.bit')\n"
+        "def create_tasks(config):\n"
+        "    return [{'name': 'validate:all', 'actions': [validate]}]\n",
+        encoding="utf-8",
+    )
+    assert run_logged_task(config, "validate:all") == 2
+    output = capfd.readouterr()
+    message = "Vitis completed without producing required artifacts: missing.bit"
+    assert message in output.out + output.err
+    run_dir = (tmp_path / "logs/last-failed").resolve()
+    metadata = json.loads((run_dir / "run.json").read_text(encoding="utf-8"))
+    task = metadata["tasks"][0]
+    assert message in (run_dir / task["log"]).read_text(encoding="utf-8")
+    assert message in task["error"]

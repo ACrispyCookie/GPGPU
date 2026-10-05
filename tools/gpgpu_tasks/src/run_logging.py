@@ -251,6 +251,11 @@ class RunLogReporter(ConsoleReporter):
         task_info = self._task_records.get(task.name)
         if task_info is not None:
             task_info["record"]["exit_code"] = _failure_exit_code(fail)
+            message = getattr(fail, "get_msg", lambda: str(fail))()
+            task_info["record"]["error"] = message
+            # Emit the runner exception before closing the task's live tee.
+            # Vendor output may indicate success even when artifact validation fails.
+            print(f"ERROR: {message}", flush=True)
         self._finish_task(task, "failed")
         super().add_failure(task, fail)  # type: ignore[arg-type]
 

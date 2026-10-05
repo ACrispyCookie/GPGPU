@@ -34,6 +34,7 @@ def test_project_paths_derive_fixed_sources_and_all_build_subdirectories(
     assert paths.bitstream == build.resolve() / "hardware/bitstream"
     assert paths.platform == build.resolve() / "hardware/platform"
     assert paths.software_build == build.resolve() / "software"
+    assert paths.vitis == build.resolve() / "software/vitis"
     assert paths.program_builds == build.resolve() / "software/programs"
     assert paths.rtl_test_build == build.resolve() / "tests/rtl"
 

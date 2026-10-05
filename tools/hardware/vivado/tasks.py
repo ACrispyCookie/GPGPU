@@ -93,7 +93,7 @@ if {{[info exists ::BD_NAME]}} {{
 
     # architecture.num_cores owns this value; do not snapshot a local build's
     # concrete core count into the portable committed block-design source.
-    normalized = _NUM_CORES_PROPERTY.sub(r"\g<1>{$::NUM_CORES}", normalized)
+    normalized = _NUM_CORES_PROPERTY.sub(r"\g<1>$::NUM_CORES", normalized)
 
     # hardware.vivado.host_interface owns these AXI offsets. Keep Vivado's
     # exported segment structure, but replace snapshot values with Tcl globals.
@@ -141,6 +141,16 @@ def export_block_design(
         normalized = normalize_exported_tcl(
             raw_export.read_text(encoding="utf-8"), repo_root, bd_name
         )
+        if re.search(
+            r"set\s+GPGPU_0\s+\[\s*create_bd_cell\s+"
+            r"-type\s+module\s+-reference\s+"
+            r"(?:GPGPU\s+GPGPU_0|\$block_name\s+\$block_cell_name)\s*\]",
+            normalized,
+        ) is None:
+            raise RuntimeError(
+                "Vivado export is missing the GPGPU module-reference cell GPGPU_0; "
+                "refusing to overwrite the committed Tcl with an incomplete design."
+            )
         current = (
             committed_export.read_text(encoding="utf-8")
             if committed_export.is_file()

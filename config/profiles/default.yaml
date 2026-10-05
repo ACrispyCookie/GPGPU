@@ -20,6 +20,18 @@ hardware:
       rdata_gpio: "0x41220000"
       status_gpio: "0x41230000"
       wdata_gpio: "0x41240000"
+  vitis:
+    version: "2026.1"
+    platform_name: gpgpu_platform
+    host_name: gpgpu_host
+    cpu: ps7_cortexa9_0
+    domain: standalone_ps7_cortexa9_0
+    os: standalone
+    template: empty_application
+    default_archive: tools/hardware/vitis/default-project.zip
+    host_sources:
+      - software/host/xc7z020/gpgpu_host.c
+      - software/host/xc7z020/main.c
 
 software:
   riscv:
@@ -62,6 +74,9 @@ tools:
     required: true
   vivado:
     command: vivado
+    required: false
+  vitis:
+    command: vitis
     required: false
   gtkwave:
     command: gtkwave

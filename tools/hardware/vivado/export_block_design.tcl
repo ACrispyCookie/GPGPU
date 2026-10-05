@@ -14,6 +14,10 @@ if {[llength $bd_file] != 1} {
 }
 
 open_bd_design $bd_file
+set gpgpu_cell [get_bd_cells -quiet GPGPU_0]
+if {[llength $gpgpu_cell] != 1} {
+    error "Refusing to export incomplete block design: missing GPGPU_0. The committed Tcl has not been changed."
+}
 file mkdir [file dirname $EXPORT_FILE]
 write_bd_tcl -force $EXPORT_FILE
 close_project

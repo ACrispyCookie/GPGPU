@@ -56,3 +56,33 @@ mapping is `address=0x41200000`, `cmd=0x41210000`, `rdata=0x41220000`,
 5) Select VITIS COMPONENTS > `gpgpu_host`, FLOW > select `gpgpu_host` > Build.
 
 6) Select VITIS COMPONENTS > `gpgpu_platform`, FLOW > select `gpgpu_platform` > Build.
+
+Or, using the cli:
+
+The CLI recreates the repository's portable Vitis 2026.1 default project from the
+Vivado XSA and enforces platform-before-host build ordering:
+
+```bash
+./gpgpu run vitis:project
+./gpgpu run vitis:build:all
+```
+
+The editable workspace is `build/software/vitis`. Open that directory in Vitis
+to change the `gpgpu_platform` or `gpgpu_host` components. After saving and
+closing Vitis, explicitly synchronize those changes back to the committed
+portable default:
+
+```bash
+./gpgpu run vitis:export
+```
+
+The expected programming artifacts are:
+
+```text
+build/software/vitis/gpgpu_platform/export/gpgpu_platform/hw/sdt/gpgpu_platform.bit
+build/software/vitis/gpgpu_platform/export/gpgpu_platform/hw/sdt/ps7_init.tcl
+build/software/vitis/gpgpu_host/build/gpgpu_host.elf
+```
+
+See [Vitis CLI flow](vitis-cli.md) for configuration, individual build stages,
+and export portability guarantees.

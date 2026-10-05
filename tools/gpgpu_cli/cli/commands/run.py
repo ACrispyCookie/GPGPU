@@ -78,6 +78,20 @@ The dependency chain is: conditional block-design extraction → project → blo
 • `vivado:export-block-design` — Strictly export the current generated-project block design on explicit request. Unlike the conditional extraction task, this fails when the project/design is absent.
 
 • `vivado:all` — Conditionally extract an existing block design, then run the complete dependency chain through `.bit` and `.xsa` generation.
+
+[bold cyan]Vitis[/bold cyan]
+
+The dependency chain is: Vivado XSA → editable Vitis project → platform build → host build.
+
+• `vitis:project` — Materialize the committed portable default project under `build/software/vitis/` and bind it to the current checkout's XSA and host sources. The generated project can be opened and edited in Vitis.
+
+• `vitis:build:platform` — Build `gpgpu_platform` and verify its `.bit` and `ps7_init.tcl` outputs.
+
+• `vitis:build:host` — Build `gpgpu_host` after the platform and verify `gpgpu_host.elf`.
+
+• `vitis:build:all` — Run the complete Vitis dependency chain through the host ELF.
+
+• `vitis:export` — Explicitly replace the committed default-project archive with a normalized snapshot of the editable generated project. Build products and machine-specific checkout paths are excluded.
 """
 
 

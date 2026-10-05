@@ -35,6 +35,13 @@ def make_config(tmp_path: Path) -> StubResolvedConfig:
         "    return [{'name': 'vivado:project', 'actions': None}]\n",
         encoding="utf-8",
     )
+    vitis_module = tmp_path / "tools/hardware/vitis/tasks.py"
+    vitis_module.parent.mkdir(parents=True)
+    vitis_module.write_text(
+        "def create_tasks(config):\n"
+        "    return [{'name': 'vitis:project', 'actions': None}]\n",
+        encoding="utf-8",
+    )
     return StubResolvedConfig(tmp_path, tmp_path / "build")
 
 
@@ -54,6 +61,7 @@ def test_loader_stores_resolved_config_and_configures_dep_file(tmp_path: Path) -
     assert [task.name for task in loader.load_tasks(cmd=None, pos_args=[])] == [
         "tests:rtl:all",
         "vivado:project",
+        "vitis:project",
     ]
 
 

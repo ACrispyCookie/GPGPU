@@ -262,7 +262,36 @@ def test_block_design_matches_documented_board_configuration() -> None:
     assert "get_ports o_running_0" not in constraints
 
 
-def test_normalize_exported_tcl_adds_portable_design_name_hook(tmp_path: Path) -> None:
+def test_committed_block_design_substitutes_configured_core_count() -> None:
+    import tkinter
+
+    source = (
+        Path(__file__).resolve().parents[3]
+        / "tools/hardware/vivado/gpgpu_block_design.tcl"
+    ).read_text(encoding="utf-8")
+    command = next(
+        line.strip() for line in source.splitlines()
+        if line.strip().startswith("set_property CONFIG.SP_PER_SM ")
+    )
+    interpreter = tkinter.Tcl()
+    interpreter.eval("set ::NUM_CORES 24; set GPGPU_0 /GPGPU_0")
+    interpreter.eval("proc set_property {args} {set ::captured $args}")
+    interpreter.eval(command)
+    assert interpreter.splitlist(interpreter.eval("set ::captured")) == (
+        "CONFIG.SP_PER_SM", "24", "/GPGPU_0"
+    )
+
+
+@pytest.mark.parametrize(
+    "property_command",
+    [
+        "set_property -dict [list CONFIG.SP_PER_SM {8}] $GPGPU_0",
+        "set_property CONFIG.SP_PER_SM {8} $GPGPU_0",
+    ],
+)
+def test_normalize_exported_tcl_adds_portable_design_name_hook(
+    tmp_path: Path, property_command: str
+) -> None:
     raw = """# CHANGE DESIGN NAME HERE
 variable design_name
 set design_name gpgpu_block_design
@@ -276,11 +305,33 @@ assign_bd_address -offset 0x41240000 -range 0x00010000 -target_address_space [ge
 create_root_design ""
 """
 
+    raw = raw.replace(
+        "set_property -dict [list CONFIG.SP_PER_SM {8}] $GPGPU_0",
+        property_command,
+    )
     normalized = vivado.normalize_exported_tcl(raw, tmp_path, "gpgpu_block_design")
 
     assert "set design_name $::BD_NAME" in normalized
     assert "set design_name gpgpu_block_design" in normalized
-    assert "CONFIG.SP_PER_SM {$::NUM_CORES}" in normalized
+    assert "CONFIG.SP_PER_SM $::NUM_CORES" in normalized
+
+    # Execute the normalized property command through Tcl, not a string-only
+    # assertion: braces previously passed the literal '$::NUM_CORES' to Vivado.
+    import tkinter
+
+    interpreter = tkinter.Tcl()
+    interpreter.eval("set ::NUM_CORES 24; set GPGPU_0 /GPGPU_0")
+    interpreter.eval("proc set_property {args} {set ::captured $args}")
+    property_command = next(
+        line for line in normalized.splitlines()
+        if line.startswith("set_property ")
+    )
+    interpreter.eval(property_command)
+    captured = interpreter.splitlist(interpreter.eval("set ::captured"))
+    if captured[0] == "-dict":
+        assert interpreter.splitlist(captured[1]) == ("CONFIG.SP_PER_SM", "24")
+    else:
+        assert captured == ("CONFIG.SP_PER_SM", "24", "/GPGPU_0")
     assert "-offset $::HOST_ADDRESS_GPIO" in normalized
     assert "-offset $::HOST_CMD_GPIO" in normalized
     assert "-offset $::HOST_RDATA_GPIO" in normalized
@@ -350,6 +401,7 @@ def test_automatic_extract_updates_tcl_when_expected_project_bd_exists(
         "# CHANGE DESIGN NAME HERE\n"
         "variable design_name\n"
         "set design_name gpgpu_block_design\n"
+        "set GPGPU_0 [create_bd_cell -type module -reference GPGPU GPGPU_0]\n"
         "create_root_design \"\"\n"
     )
     command = [
@@ -411,6 +463,7 @@ def test_export_warns_and_updates_when_committed_tcl_is_stale(tmp_path: Path) ->
         "# CHANGE DESIGN NAME HERE\n"
         "variable design_name\n"
         "set design_name gpgpu_block_design\n"
+        "set GPGPU_0 [create_bd_cell -type module -reference GPGPU GPGPU_0]\n"
         "create_root_design \"\"\n"
     )
     command = [
@@ -446,6 +499,7 @@ def test_export_reports_up_to_date_without_warning(tmp_path: Path) -> None:
         "# CHANGE DESIGN NAME HERE\n"
         "variable design_name\n"
         "set design_name gpgpu_block_design\n"
+        "set GPGPU_0 [create_bd_cell -type module -reference GPGPU GPGPU_0]\n"
         "create_root_design \"\"\n"
     )
     committed.write_text(
@@ -473,3 +527,24 @@ def test_export_reports_up_to_date_without_warning(tmp_path: Path) -> None:
 
     assert "up to date" in terminal.getvalue()
     assert "WARNING" not in terminal.getvalue()
+
+
+def test_export_rejects_empty_design_without_overwriting_source(tmp_path: Path) -> None:
+    raw_export = tmp_path / "empty.raw.tcl"
+    committed = tmp_path / "gpgpu_block_design.tcl"
+    committed.write_text("# working source\n", encoding="utf-8")
+    empty_export = (
+        "# CHANGE DESIGN NAME HERE\nvariable design_name\n"
+        "set design_name gpgpu_block_design\ncreate_root_design \"\"\n"
+    )
+    command = [
+        sys.executable, "-c",
+        f"from pathlib import Path; Path({str(raw_export)!r}).write_text({empty_export!r})",
+    ]
+    with pytest.raises(RuntimeError, match="GPGPU_0"):
+        vivado.export_block_design(
+            command, tmp_path, raw_export, committed, tmp_path,
+            "gpgpu_block_design",
+        )
+    assert committed.read_text(encoding="utf-8") == "# working source\n"
+    assert not raw_export.exists()

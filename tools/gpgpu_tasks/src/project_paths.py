@@ -95,6 +95,10 @@ class ProjectPaths:
         return self.build_root / "software"
 
     @property
+    def vitis(self) -> Path:
+        return self.software_build / "vitis"
+
+    @property
     def program_builds(self) -> Path:
         return self.software_build / "programs"
 

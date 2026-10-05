@@ -11,4 +11,6 @@
 # tools:
 #   vivado:
 #     command: /opt/Xilinx/Vivado/2025.2/bin/vivado
+#   vitis:
+#     command: /opt/Xilinx/2026.1/Vitis/bin/vitis
 {}
