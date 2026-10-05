@@ -245,7 +245,6 @@ The intended nbody FPGA usage is chunked execution:
 host writes args for steps 0..49
 kernel runs 50 steps
 host dumps output and visualizes
-host sends READ_DONE
 host writes args for steps 50..99
 kernel runs next 50 steps from persistent DMEM state
 host dumps output and visualizes

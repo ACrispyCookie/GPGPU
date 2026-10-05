@@ -135,12 +135,14 @@ module HostCommandProcessor (
     always @(posedge clk) begin
         if (!rst) begin
             o_host_rdata <= 32'b0;
-        end else if (current_state == S_READ) begin
+        end else if (i_core_state == `CORE_IDLE && current_state == S_READ) begin
             case (host_command)
                 CMD_IMEM_READ: o_host_rdata <= i_imem_rdata; 
                 CMD_DMEM_READ: o_host_rdata <= i_dmem_rdata; 
                 CMD_REG_READ: o_host_rdata <= i_reg_rdata;
             endcase
+        end else begin
+            o_host_rdata <= 32'b0;
         end
     end
     
