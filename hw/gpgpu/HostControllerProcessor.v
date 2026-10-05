@@ -29,10 +29,10 @@ module HostCommandProcessor (
 );
     localparam CMD_IMEM_WRITE = 3'd0;
     localparam CMD_DMEM_WRITE = 3'd1;
-    localparam CMD_DMEM_READ = 3'd3;
-    localparam CMD_IMEM_READ = 3'd4;
-    localparam CMD_REG_READ = 3'd5;
-    localparam CMD_RUN = 3'd6;
+    localparam CMD_DMEM_READ = 3'd2;
+    localparam CMD_IMEM_READ = 3'd3;
+    localparam CMD_REG_READ = 3'd4;
+    localparam CMD_RUN = 3'd5;
 
     localparam S_IDLE = 3'd0;
     localparam S_ACCEPT = 3'd1;

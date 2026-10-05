@@ -10,8 +10,7 @@ This runner owns only the common host-side UART flow:
 5. run the kernel once
 6. ask the adapter which DMEM window to dump
 7. dump that DMEM window and let the adapter process it
-8. send READ_DONE so the cores return to LOADING
-9. repeat for --kernel-calls launches
+8. repeat for --kernel-calls launches
 
 Program-specific logic belongs in programs/<program>/fpga.py.
 """
@@ -437,8 +436,6 @@ def run_kernel_call(
         words=output_words,
         adapter_args=adapter_args,
     )
-
-    uart.done()
 
     return previous_kernel_args
 

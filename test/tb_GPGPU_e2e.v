@@ -12,10 +12,10 @@ module tb_GPGPU_e2e ();
     // Host command encodings
     localparam CMD_IMEM_WRITE = 3'd0;
     localparam CMD_DMEM_WRITE = 3'd1;
-    localparam CMD_DMEM_READ = 3'd3;
-    localparam CMD_IMEM_READ = 3'd4;
-    localparam CMD_REG_READ = 3'd5;
-    localparam CMD_RUN = 3'd6;
+    localparam CMD_DMEM_READ = 3'd2;
+    localparam CMD_IMEM_READ = 3'd3;
+    localparam CMD_REG_READ = 3'd4;
+    localparam CMD_RUN = 3'd5;
     localparam RET_INSTR = 32'h00008067;
 
     reg clk_in;
