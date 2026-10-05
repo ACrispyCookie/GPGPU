@@ -354,7 +354,6 @@ class FpgaNbody3DBackend(Backend):
       1. write GPGPU_ARGS = [data_base, steps, 0, 0]
       2. run the kernel
       3. dump pos_x,pos_y,pos_z from the same base region
-      4. send done so the monitor returns to loading state
     """
 
     source = "fpga-uart"
@@ -476,10 +475,7 @@ class FpgaNbody3DBackend(Backend):
         start = time.perf_counter()
         self._load_kernel_args(steps=steps)
         self.uart.run()
-        try:
-            positions = self._read_positions()
-        finally:
-            self.uart.done()
+        positions = self._read_positions()
         self.step_count += steps
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return Frame(

@@ -167,25 +167,20 @@ The generic flow is:
       process_output(run_index=..., start_step=..., steps=..., words=output)
       ```
 
-   6. Tell the host controller the read/dump phase is done, returning the core to loading state:
 
-      ```python
-      uart.done()
-      ```
-
-   7. Optionally call:
+   6. Optionally call:
 
       ```python
       after_run(run_index=..., start_step=..., steps=..., words=output)
       ```
 
-9. After all chunks finish, call:
+7. After all chunks finish, call:
 
    ```python
    finalize(visualize=...)
    ```
 
-10. Print success.
+8. Print success.
 
 The key idea is that `fpga_run.py` is program-agnostic.  It knows how to talk to the board, but not what a program's arguments or output mean.
 
