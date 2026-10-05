@@ -5,7 +5,7 @@ from __future__ import annotations
 import typer
 
 from config import ConfigError, ResolvedConfig
-from src import run as run_doit
+from src import run_logged_task
 
 
 _TASK_HELP = """A colon-separated task name from the GPGPU build graph.
@@ -92,6 +92,6 @@ def run(
         _ = config.build_root
     except ConfigError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    status = run_doit(config, ["run", task])
+    status = run_logged_task(config, task)
     if status:
         raise typer.Exit(status)

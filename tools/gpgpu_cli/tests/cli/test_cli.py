@@ -179,19 +179,19 @@ def test_run_dispatches_exactly_one_task_with_resolved_config(
     repo = make_repo(tmp_path)
     captured: dict[str, object] = {}
 
-    def fake_run(config: object, arguments: list[str]) -> int:
+    def fake_run(config: object, task: str) -> int:
         captured["config"] = config
-        captured["arguments"] = arguments
+        captured["task"] = task
         return 0
 
-    monkeypatch.setattr(run_command_module, "run_doit", fake_run)
+    monkeypatch.setattr(run_command_module, "run_logged_task", fake_run)
     result = runner.invoke(
         create_app(repo_root=repo),
         ["run", "software:programs:simple:x86"],
     )
 
     assert result.exit_code == 0, result.output
-    assert captured["arguments"] == ["run", "software:programs:simple:x86"]
+    assert captured["task"] == "software:programs:simple:x86"
     assert captured["config"].profile == "default"  # type: ignore[union-attr]
 
 
@@ -201,12 +201,12 @@ def test_run_rejects_build_root_overlap_before_dispatch(
     repo = make_repo(tmp_path)
     dispatched = False
 
-    def fake_run(config: object, arguments: list[str]) -> int:
+    def fake_run(config: object, task: str) -> int:
         nonlocal dispatched
         dispatched = True
         return 0
 
-    monkeypatch.setattr(run_command_module, "run_doit", fake_run)
+    monkeypatch.setattr(run_command_module, "run_logged_task", fake_run)
     result = runner.invoke(
         create_app(repo_root=repo),
         ["--set", "paths.build.root=.", "run", "software:programs:simple:x86"],
@@ -220,7 +220,7 @@ def test_run_rejects_build_root_overlap_before_dispatch(
 def test_run_propagates_pydoit_failure_status(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(run_command_module, "run_doit", lambda config, arguments: 3)
+    monkeypatch.setattr(run_command_module, "run_logged_task", lambda config, task: 3)
 
     result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "missing"])
 

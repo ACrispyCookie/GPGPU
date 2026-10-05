@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 import importlib.util
 from pathlib import Path
+import sys
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Callable, cast
 
@@ -13,6 +14,7 @@ from doit.doit_cmd import DoitMain
 from doit.task import Task, dict_to_task
 
 from .project_paths import ProjectPaths
+from .run_logging import RunLogReporter
 
 if TYPE_CHECKING:
     from config import ResolvedConfig
@@ -81,3 +83,26 @@ def run(resolved_config: ResolvedConfig, arguments: Sequence[str] = ()) -> int:
     loader = create_task_loader(resolved_config)
     result = DoitMain(loader, config_filenames=()).run(list(arguments))
     return 0 if result is None else result
+
+
+def run_logged_task(resolved_config: ResolvedConfig, task: str) -> int:
+    """Run one task dependency graph with live, persistent per-stage logs."""
+
+    loader = create_task_loader(resolved_config)
+    reporter = RunLogReporter(
+        sys.stdout,
+        {"failure_verbosity": 0},
+        repo_root=resolved_config.repo_root,
+        requested_task=task,
+    )
+    status = 3
+    try:
+        result = DoitMain(
+            loader,
+            config_filenames=(),
+            extra_config={"run": {"reporter": reporter}},
+        ).run(["run", "--verbosity=2", task])
+        status = 0 if result is None else result
+        return status
+    finally:
+        reporter.finalize(status)
