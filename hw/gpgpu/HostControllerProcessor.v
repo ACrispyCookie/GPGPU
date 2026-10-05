@@ -25,16 +25,14 @@ module HostCommandProcessor (
     // GPU control signals interface
     output reg o_host_imem_wen,
     output reg o_host_dmem_wen,
-    output reg o_host_done_writing,
-    output reg o_host_done_dumping
+    output reg o_host_run
 );
     localparam CMD_IMEM_WRITE = 3'd0;
     localparam CMD_DMEM_WRITE = 3'd1;
-    localparam CMD_WRITE_DONE = 3'd2;
     localparam CMD_DMEM_READ = 3'd3;
     localparam CMD_IMEM_READ = 3'd4;
     localparam CMD_REG_READ = 3'd5;
-    localparam CMD_READ_DONE = 3'd6;
+    localparam CMD_RUN = 3'd6;
 
     localparam S_IDLE = 3'd0;
     localparam S_ACCEPT = 3'd1;
@@ -61,8 +59,7 @@ module HostCommandProcessor (
 
                     CMD_DMEM_WRITE,
                     CMD_IMEM_WRITE,
-                    CMD_WRITE_DONE,
-                    CMD_READ_DONE: begin
+                    CMD_RUN: begin
                         next_state = S_WRITE;
                     end
 
@@ -90,8 +87,7 @@ module HostCommandProcessor (
         o_host_done = 1'b0;
         o_host_imem_wen = 1'b0;
         o_host_dmem_wen = 1'b0;
-        o_host_done_writing = 1'b0;
-        o_host_done_dumping = 1'b0;
+        o_host_run = 1'b0;
 
         case (current_state)
             S_ACCEPT: begin
@@ -101,20 +97,16 @@ module HostCommandProcessor (
                 o_host_busy = 1'b1;
                 case (host_command)
                     CMD_DMEM_WRITE: begin
-                        if (i_core_state == `CORE_LOADING)
+                        if (i_core_state == `CORE_IDLE)
                             o_host_dmem_wen = 1'b1;
                     end
                     CMD_IMEM_WRITE: begin
-                        if (i_core_state == `CORE_LOADING)
+                        if (i_core_state == `CORE_IDLE)
                             o_host_imem_wen = 1'b1;
                     end
-                    CMD_WRITE_DONE: begin
-                        if (i_core_state == `CORE_LOADING)
-                            o_host_done_writing = 1'b1;
-                    end
-                    CMD_READ_DONE: begin
-                        if (i_core_state == `CORE_DUMPING)
-                            o_host_done_dumping = 1'b1;
+                    CMD_RUN: begin
+                        if (i_core_state == `CORE_IDLE)
+                            o_host_run = 1'b1;
                     end
                 endcase
             end

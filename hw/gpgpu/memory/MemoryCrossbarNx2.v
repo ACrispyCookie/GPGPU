@@ -33,6 +33,7 @@ module MemoryCrossbarNx2 #(
 );
 
     localparam LOG2_N = $clog2(N);
+    wire collision_w;
 
     //& =============================================
     //& PICK CORES TO SERVE
@@ -163,7 +164,6 @@ module MemoryCrossbarNx2 #(
     //& =============================================
     //& WRITE COLLISION DETECTION
     //& =============================================
-    wire collision_w;
     wire [ADDR_W-1:0] collision_addr_w;
 
     assign collision_w = winner_a_valid && winner_b_valid && mux_wen_a && mux_wen_b && (mux_addr_a == mux_addr_b);

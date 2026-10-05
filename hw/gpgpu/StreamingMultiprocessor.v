@@ -35,6 +35,13 @@ module StreamingMultiprocessor #(
     wire [NUM_CORES-1:0] sp_mem_grant;
     wire [NUM_CORES-1:0] sp_mem_rvalid;
     reg [NUM_CORES-1:0] mem_satisfied;
+
+    //! Only request memory if the core hasn't already been served during this stall
+    wire [NUM_CORES-1:0] active_mem_ren = sp_mem_ren & ~mem_satisfied;
+    wire [NUM_CORES-1:0] active_mem_wen = sp_mem_wen & ~mem_satisfied;
+
+    //! If even a single core asks for memory but is denied, stall (Handles Reads and Writes)
+    wire global_stall = (|(active_mem_ren & ~sp_mem_grant) | |(active_mem_wen & ~sp_mem_grant)) || !i_enable;
     
     always @(posedge clk) begin
         if (!rst) begin
@@ -48,18 +55,12 @@ module StreamingMultiprocessor #(
         end
     end
 
-    //! Only request memory if the core hasn't already been served during this stall
-    wire [NUM_CORES-1:0] active_mem_ren = sp_mem_ren & ~mem_satisfied;
-    wire [NUM_CORES-1:0] active_mem_wen = sp_mem_wen & ~mem_satisfied;
-
-    //! If even a single core asks for memory but is denied, stall (Handles Reads and Writes)
-    wire global_stall = (|(active_mem_ren & ~sp_mem_grant) | |(active_mem_wen & ~sp_mem_grant)) || !i_enable;
-
     //& ===============
     //& READ DATA LATCHING
     //& ===============
     reg [31:0] latched_rdata [0:NUM_CORES-1];
     reg [NUM_CORES-1:0] mem_grant_delayed;
+    wire [NUM_CORES*32-1:0] flat_mem_rdata;
     integer k;
 
     //! BRAM data arrives exactly 1 cycle after a grant. We delay the grant signal
@@ -249,7 +250,6 @@ module StreamingMultiprocessor #(
 
     wire [NUM_CORES*`DMEM_AW-1:0] flat_mem_addr;
     wire [NUM_CORES*32-1:0] flat_mem_wdata;
-    wire [NUM_CORES*32-1:0] flat_mem_rdata;
 
     genvar i;
     generate

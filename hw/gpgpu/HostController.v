@@ -24,11 +24,11 @@ module HostController (
     output reg [1:0] o_core_state
 );
     (* mark_debug = "false" *) reg [1:0] current_state, next_state;
-    wire host_done_writing, host_done_dumping;
+    wire host_run;
 
     always @(posedge clk) begin
         if (!rst) begin
-            current_state <= `CORE_LOADING;
+            current_state <= `CORE_IDLE;
         end else begin
             current_state <= next_state;
         end
@@ -36,26 +36,26 @@ module HostController (
 
     always @(*) begin
         case (current_state)
-            `CORE_LOADING: next_state = host_done_writing ? `CORE_RUNNING : `CORE_LOADING;
-            `CORE_RUNNING: next_state = i_core_complete ? `CORE_DUMPING : `CORE_RUNNING;
-            `CORE_DUMPING: next_state = host_done_dumping ? `CORE_LOADING : `CORE_DUMPING;
-            default: next_state = `CORE_LOADING;
+            `CORE_IDLE: next_state = host_run ? `CORE_RESET : `CORE_IDLE;
+            `CORE_RESET: next_state = `CORE_RUNNING;
+            `CORE_RUNNING: next_state = i_core_complete ? `CORE_IDLE : `CORE_RUNNING;
+            default: next_state = `CORE_IDLE;
         endcase
     end
 
     always @(*) begin
         case (current_state)
-            `CORE_LOADING: begin
-                o_core_state = `CORE_LOADING;
+            `CORE_IDLE: begin
+                o_core_state = `CORE_IDLE;
             end
+            `CORE_RESET: begin
+                o_core_state = `CORE_RESET;
+            end 
             `CORE_RUNNING: begin
                 o_core_state = `CORE_RUNNING;
-            end 
-            `CORE_DUMPING: begin
-                o_core_state = `CORE_DUMPING;
             end
             default: begin
-                o_core_state = `CORE_LOADING;
+                o_core_state = `CORE_IDLE;
             end
         endcase
     end
@@ -80,8 +80,7 @@ module HostController (
         .o_host_busy(o_host_busy),
         .o_host_done(o_host_done),
 
-        .o_host_done_writing(host_done_writing),
-        .o_host_done_dumping(host_done_dumping)
+        .o_host_run(host_run)
     );
     
 endmodule

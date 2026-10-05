@@ -6,9 +6,8 @@ module GPGPU #(
 ) (
     input wire clk_in,
     input wire rst,
-    output wire o_loading,
+    output wire o_idle,
     output wire o_running,
-    output wire o_dumping,
     
     // Host CPU commands
     input wire [2:0] i_host_command,
@@ -46,10 +45,9 @@ module GPGPU #(
     wire imem_ren, imem_wen, dmem_ren_a, dmem_wen_a, dmem_ren_b, dmem_wen_b;
 
     assign core_run = core_state == `CORE_RUNNING;
-    assign core_clear = core_state == `CORE_LOADING;
-    assign o_loading = core_state == `CORE_LOADING;
+    assign core_clear = core_state == `CORE_RESET;
+    assign o_idle = core_state == `CORE_IDLE;
     assign o_running = core_state == `CORE_RUNNING;
-    assign o_dumping = core_state == `CORE_DUMPING;
 
     assign dmem_addr_a = core_run ? core_dmem_addr_a : host_address;
     assign dmem_wdata_a = core_run ? core_dmem_wdata_a : host_wdata;
