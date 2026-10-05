@@ -1,10 +1,9 @@
-#include "../gpgpu_config.h"
+#include "../gpgpu_runtime.h"
 
 #define CORES GPGPU_NUM_CORES
 
 #ifdef __riscv
 
-#include "../gpgpu_runtime.h"
 
 void main(void)
 {
@@ -12,8 +11,8 @@ void main(void)
 
     volatile int *base = (volatile int *)(uintptr_t)GPGPU_ARGS[0];
 
-    volatile int indexes_array = base;
-    volatile int ten_array = base + (CORES + 1)
+    volatile int *indexes_array = base;
+    volatile int *ten_array = base + (CORES + 1);
 
     // All SPs must write their thread id
     indexes_array[tid] = tid;

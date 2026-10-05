@@ -1,9 +1,9 @@
-#define WIDTH  16
-#define HEIGHT 16
-
-#include "../gpgpu_config.h"
+#include "../gpgpu_runtime.h"
 
 #define CORES GPGPU_NUM_CORES
+
+#define WIDTH  16
+#define HEIGHT 16
 
 // ======================================================
 // Input Image
@@ -131,6 +131,8 @@ GPGPU_START(main)
 
 int main()
 {
+    int output[WIDTH * HEIGHT];
+
     for (int idx = 0;
          idx < WIDTH * HEIGHT;
          idx++)
