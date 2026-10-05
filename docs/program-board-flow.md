@@ -67,7 +67,10 @@ Vivado XSA and enforces platform-before-host build ordering:
 ./gpgpu run vitis:build:all
 ```
 
-The editable workspace is `build/software/vitis`. Open that directory in Vitis
+The editable workspace is `build/software/vitis`. Interactive CLI builds show a
+[JSON-backed build monitor](run-monitor.md) with stage progress, durations, and
+live logs; use `./gpgpu run vitis:build:all --plain` for streaming plain output.
+Open the workspace directory in Vitis
 to change the `gpgpu_platform` or `gpgpu_host` components. After saving and
 closing Vitis, explicitly synchronize those changes back to the committed
 portable default:

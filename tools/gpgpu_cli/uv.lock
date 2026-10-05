@@ -61,12 +61,14 @@ version = "0.1.0"
 source = { editable = "../gpgpu_tasks" }
 dependencies = [
     { name = "doit" },
+    { name = "rich" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "doit", specifier = ">=0.37,<1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8,<9" },
+    { name = "rich", specifier = ">=13,<15" },
 ]
 provides-extras = ["dev"]
 

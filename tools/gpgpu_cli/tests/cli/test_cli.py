@@ -3,12 +3,10 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-from typer.testing import CliRunner
-
 import cli.commands.run as run_command_module
+import pytest
 from cli.cli import create_app
-
+from typer.testing import CliRunner
 
 runner = CliRunner()
 
@@ -195,6 +193,22 @@ def test_run_dispatches_exactly_one_task_with_resolved_config(
     assert captured["config"].profile == "default"  # type: ignore[union-attr]
 
 
+def test_run_plain_disables_monitor_without_changing_task_or_exit_status(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    captured: dict[str, object] = {}
+
+    def fake_run(config: object, task: str, *, monitor: bool | None = None) -> int:
+        captured.update(task=task, monitor=monitor)
+        return 2
+
+    monkeypatch.setattr(run_command_module, "run_logged_task", fake_run)
+    result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "demo:all", "--plain"])
+
+    assert result.exit_code == 2, result.output
+    assert captured == {"task": "demo:all", "monitor": False}
+
+
 def test_run_rejects_build_root_overlap_before_dispatch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -274,6 +288,36 @@ def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> No
     assert "vivado:export-block-design" in result.stdout
     assert "vivado:all" in result.stdout
     assert "dependency chain" in result.stdout
+
+
+def test_run_help_renders_code_references_without_literal_backticks(tmp_path: Path) -> None:
+    result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "--help"])
+
+    assert result.exit_code == 0
+    assert "`" not in result.stdout
+    assert "fpga:upload" in result.stdout
+    assert "hardware.fpga.upload.destination" in result.stdout
+
+
+def test_task_help_highlights_task_names_separately_from_references() -> None:
+    from rich.console import Console
+    from rich.text import Text
+
+    console = Console()
+    markup = run_command_module._format_task_help(
+        "• `fpga:upload` — Configure `hardware.fpga.upload.directory`. "
+        "Example: `software:programs:<program>:x86`"
+    )
+    rendered = Text.from_markup(markup)
+    task_style = rendered.get_style_at_offset(console, rendered.plain.index("fpga:upload"))
+    reference_style = rendered.get_style_at_offset(console, rendered.plain.index("hardware.fpga"))
+    example_style = rendered.get_style_at_offset(console, rendered.plain.index("software:programs"))
+    assert task_style.color is not None
+    assert example_style.color is not None
+    assert reference_style.color is not None
+    assert task_style.bold and task_style.color.name == "bright_green"
+    assert example_style.bold and example_style.color.name == "bright_green"
+    assert reference_style.color.name == "yellow"
 
 
 def test_run_help_lists_fpga_upload_as_explicit_existing_artifact_operation(tmp_path: Path) -> None:

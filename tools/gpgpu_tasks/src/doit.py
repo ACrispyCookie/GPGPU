@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from collections.abc import Sequence
 import importlib.util
-from pathlib import Path
+import os
 import sys
+from collections.abc import Callable, Sequence
+from pathlib import Path
 from types import ModuleType
-from typing import TYPE_CHECKING, Any, Callable, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from doit.cmd_base import TaskLoader2
 from doit.doit_cmd import DoitMain
@@ -87,7 +88,7 @@ def run(resolved_config: ResolvedConfig, arguments: Sequence[str] = ()) -> int:
     return 0 if result is None else result
 
 
-def run_logged_task(resolved_config: ResolvedConfig, task: str) -> int:
+def run_logged_task(resolved_config: ResolvedConfig, task: str, *, monitor: bool | None = None) -> int:
     """Run one task dependency graph with live, persistent per-stage logs."""
 
     loader = create_task_loader(resolved_config)
@@ -96,6 +97,7 @@ def run_logged_task(resolved_config: ResolvedConfig, task: str) -> int:
         {"failure_verbosity": 0},
         repo_root=resolved_config.repo_root,
         requested_task=task,
+        monitor=(bool(sys.stdout.isatty()) and os.isatty(1) and not os.environ.get("CI")) if monitor is None else monitor,
     )
     status = 3
     try:
@@ -106,5 +108,8 @@ def run_logged_task(resolved_config: ResolvedConfig, task: str) -> int:
         ).run(["run", "--verbosity=2", task])
         status = 0 if result is None else result
         return status
+    except KeyboardInterrupt:
+        status = 130
+        raise
     finally:
         reporter.finalize(status)

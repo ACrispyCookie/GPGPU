@@ -2,26 +2,29 @@
 
 from __future__ import annotations
 
-from datetime import datetime
 import json
 import os
-from pathlib import Path
 import re
 import subprocess
 import sys
-from threading import Lock, Thread
 import time
+from datetime import datetime
+from pathlib import Path
+from threading import Lock, Thread
 from typing import IO, Any
 
 from doit.reporter import ConsoleReporter
 from doit.task import Task
 
+from .run_monitor import BuildDashboard
+
 
 class _FdTee:
     """Tee both process file descriptors to their terminal and one binary log."""
 
-    def __init__(self, log_path: Path) -> None:
+    def __init__(self, log_path: Path, *, mirror: bool = True) -> None:
         self.log_path = log_path
+        self.mirror = mirror
         self._log: IO[bytes] | None = None
         self._saved_fds: dict[int, int] = {}
         self._threads: list[Thread] = []
@@ -30,18 +33,27 @@ class _FdTee:
 
     def start(self) -> None:
         self._flush_streams()
-        self._log = self.log_path.open("wb")
-        for fd in (1, 2):
-            saved_fd = os.dup(fd)
-            read_fd, write_fd = os.pipe()
-            os.dup2(write_fd, fd)
-            os.close(write_fd)
-            self._saved_fds[fd] = saved_fd
-            thread = Thread(target=self._copy, args=(read_fd, saved_fd), daemon=True)
-            thread.start()
-            self._threads.append(thread)
-        self._wrap_python_stream("stdout", 1)
-        self._wrap_python_stream("stderr", 2)
+        try:
+            self._log = self.log_path.open("wb")
+            for fd in (1, 2):
+                saved_fd = os.dup(fd)
+                self._saved_fds[fd] = saved_fd
+                read_fd, write_fd = os.pipe()
+                try:
+                    os.dup2(write_fd, fd)
+                    thread = Thread(target=self._copy, args=(read_fd, saved_fd), daemon=True)
+                    thread.start()
+                    self._threads.append(thread)
+                except BaseException:
+                    os.close(read_fd)
+                    raise
+                finally:
+                    os.close(write_fd)
+            self._wrap_python_stream("stdout", 1)
+            self._wrap_python_stream("stderr", 2)
+        except BaseException:
+            self.stop()
+            raise
 
     def stop(self) -> None:
         self._flush_streams()
@@ -55,6 +67,7 @@ class _FdTee:
             os.close(saved_fd)
         if self._log is not None:
             self._log.close()
+            self._log = None
         self._saved_fds.clear()
         self._saved_streams.clear()
         self._threads.clear()
@@ -83,7 +96,11 @@ class _FdTee:
                     if self._log is not None:
                         self._log.write(chunk)
                         self._log.flush()
-                _write_all(terminal_fd, chunk)
+                if self.mirror:
+                    try:
+                        _write_all(terminal_fd, chunk)
+                    except OSError:
+                        pass  # Broken terminal must not stop draining task output.
         finally:
             os.close(read_fd)
 
@@ -92,7 +109,7 @@ class _FdTee:
         for stream in (sys.stdout, sys.stderr):
             try:
                 stream.flush()
-            except (AttributeError, ValueError):
+            except (AttributeError, ValueError, OSError):
                 pass
 
 
@@ -104,7 +121,7 @@ class _TextTee:
         self.capture = capture
 
     def write(self, content: str) -> int:
-        written = self.original.write(content)  # type: ignore[attr-defined]
+        written = self.original.write(content) if self.capture.mirror else len(content)  # type: ignore[attr-defined]
         self.capture.write_text(content)
         return len(content) if written is None else written
 
@@ -165,7 +182,7 @@ class RunLogReporter(ConsoleReporter):
 
     desc = "stream task output and save per-run logs"
 
-    def __init__(self, outstream: object, options: dict[str, object], *, repo_root: Path, requested_task: str) -> None:
+    def __init__(self, outstream: object, options: dict[str, object], *, repo_root: Path, requested_task: str, monitor: bool = False) -> None:
         super().__init__(outstream, options)
         self.repo_root = repo_root
         self.requested_task = requested_task
@@ -186,7 +203,21 @@ class RunLogReporter(ConsoleReporter):
         self._started_at: dict[str, float] = {}
         self._capture: _FdTee | None = None
         self._active_task: str | None = None
+        self._monitor_requested = monitor
+        self._dashboard: BuildDashboard | None = None
         self._write_metadata()
+
+    def write(self, text: str) -> None:
+        if not self._dashboard_active():
+            super().write(text)
+
+    def _dashboard_active(self) -> bool:
+        return self._dashboard is not None and self._dashboard.active
+
+    def _dashboard_failed(self) -> None:
+        capture = self._capture
+        if capture is not None:
+            capture.mirror = True
 
     def _create_run_dir(self) -> tuple[str, Path]:
         runs_dir = self.repo_root / "logs/runs"
@@ -228,6 +259,10 @@ class RunLogReporter(ConsoleReporter):
             self._task_records[task.name] = {"record": record, "log_name": log_name}
         self._write_metadata()
 
+        if self._monitor_requested:
+            self._dashboard = BuildDashboard(self.run_dir, self._dashboard_failed)
+            self._dashboard.start()
+
     def execute_task(self, task: Task) -> None:
         task_info = self._task_records.get(task.name)
         if task_info is None:
@@ -236,10 +271,15 @@ class RunLogReporter(ConsoleReporter):
         record = task_info["record"]
         record["status"] = "running"
         record["log"] = task_info["log_name"]
+        record["started_at"] = datetime.now().astimezone().isoformat(timespec="microseconds")
         self._started_at[task.name] = time.perf_counter()
         self._active_task = task.name
-        self._capture = _FdTee(self.run_dir / task_info["log_name"])
+        self._capture = _FdTee(self.run_dir / task_info["log_name"], mirror=not self._dashboard_active())
         self._capture.start()
+        # Refresh may fail between evaluating mirror and assigning the capture.
+        # Once assigned, the failure callback can safely restore mirroring too.
+        if not self._dashboard_active():
+            self._capture.mirror = True
         print(f".  {task.title()}", flush=True)
         self._write_metadata()
 
@@ -259,6 +299,13 @@ class RunLogReporter(ConsoleReporter):
         self._finish_task(task, "failed")
         super().add_failure(task, fail)  # type: ignore[arg-type]
 
+    def runtime_error(self, msg: str) -> None:
+        # ConsoleReporter's final summary is hidden while Live is active. Keep
+        # runner errors in the same JSON source as the rest of the dashboard.
+        super().runtime_error(msg)
+        self.metadata["error"] = "\n".join(str(error) for error in self.runtime_errors)
+        self._write_metadata()
+
     def skip_uptodate(self, task: Task) -> None:
         task_info = self._task_records.get(task.name)
         if task_info is not None:
@@ -270,19 +317,33 @@ class RunLogReporter(ConsoleReporter):
         task_info = self._task_records.get(task.name)
         if task_info is None:
             return
+        duration = round(time.perf_counter() - self._started_at[task.name], 3)
         if self._capture is not None and self._active_task == task.name:
             self._capture.stop()
             self._capture = None
             self._active_task = None
         record = task_info["record"]
         record["status"] = status
-        record["duration_s"] = round(time.perf_counter() - self._started_at[task.name], 3)
+        record["duration_s"] = duration
         self._write_metadata()
 
     def finalize(self, exit_code: int) -> None:
+        try:
+            self._finalize(exit_code)
+        finally:
+            if self._dashboard is not None:
+                self._dashboard.stop()
+
+    def _finalize(self, exit_code: int) -> None:
+        finished = time.perf_counter()
         if self._capture is not None:
             self._capture.stop()
             self._capture = None
+        for record in self.metadata["tasks"]:
+            if record["status"] == "running":
+                record["status"] = "interrupted" if exit_code == 130 else "failed"
+                record["duration_s"] = round(finished - self._started_at[record["task"]], 3)
+        self._active_task = None
         failed_exit_codes = [
             record.get("exit_code", 1)
             for record in self.metadata["tasks"]

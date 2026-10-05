@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
-import typer
+import re
 
-from config import ConfigError, ResolvedConfig
+import typer
+from rich.markup import escape
 from src import run_logged_task
 
+from config import ConfigError, ResolvedConfig
 
 _TASK_HELP = """A colon-separated task name from the GPGPU build graph.
 
@@ -99,9 +101,26 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 """
 
 
+def _format_task_help(text: str) -> str:
+    """Render task identifiers and inline references using terminal styles."""
+    def highlight(match: re.Match[str]) -> str:
+        value = match[1]
+        style = (
+            "bold bright_green"
+            if value.startswith(("software:programs:", "tests:rtl:", "vivado:", "vitis:", "fpga:"))
+            else "yellow"
+        )
+        return f"[{style}]{escape(value)}[/{style}]"
+
+    return re.sub(r"`([^`]+)`", highlight, text)
+
+
 def run(
     ctx: typer.Context,
-    task: str = typer.Argument(..., metavar="TASK", help=_TASK_HELP),
+    task: str = typer.Argument(..., metavar="TASK", help=_format_task_help(_TASK_HELP)),
+    plain: bool = typer.Option(
+        False, "--plain", help="Stream plain logs instead of the interactive build monitor."
+    ),
 ) -> None:
     """Run one task and all of its dependencies from the GPGPU build graph."""
 
@@ -110,6 +129,6 @@ def run(
         _ = config.build_root
     except ConfigError as exc:
         raise typer.BadParameter(str(exc)) from exc
-    status = run_logged_task(config, task)
+    status = run_logged_task(config, task, monitor=False) if plain else run_logged_task(config, task)
     if status:
         raise typer.Exit(status)
