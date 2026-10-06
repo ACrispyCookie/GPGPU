@@ -10,8 +10,8 @@ from rich.markup import escape
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
-from typer.core import TyperCommand
 from src import run_logged_task
+from typer.core import TyperCommand
 
 from config import ConfigError, ResolvedConfig
 
@@ -65,14 +65,13 @@ Example: `software:programs:simple:x86`
 
 [bold cyan]Vivado[/bold cyan]
 
-The dependency chain is: conditional block-design extraction → project → block design/wrapper → synthesis → implementation → bitstream → XSA hardware platform.
+The dependency chain is: project → block-design build → block-design run (wrapper) → synthesis → implementation → bitstream → XSA hardware platform.
 
-• `vivado:extract-block-design` — If the configured project and block design exist, refresh the committed portable Tcl before any potentially destructive project recreation; otherwise use the committed Tcl as the first-clone bootstrap.
+• `vivado:project` — Create or refresh the generated Vivado project from repository RTL and XDC sources, preserving the saved block design before destructive recreation.
 
-• `vivado:project` — Recreate the generated Vivado project from repository RTL and XDC sources.
+• `vivado:block-design:build` — Reuse the saved block design in the configured build project and export it to `tools/hardware/vivado/create_block_design.tcl`; otherwise create the default design from that template. Existing saved GUI changes take priority over template edits.
 
-• `vivado:block-design` — Recreate `gpgpu_block_design` and generate `gpgpu_block_design_wrapper`.
-  The configured `hardware.vivado.host_interface.*` addresses are applied to the five AXI GPIO segments before validation and wrapper generation.
+• `vivado:block-design:run` — Generate block-design output products and the HDL wrapper after `vivado:block-design:build`, then register the wrapper as the project top. The configured core count and `hardware.vivado.host_interface.*` addresses remain config-owned.
 
 • `vivado:synthesis` — Run synthesis after creating the project and block design.
 
@@ -82,9 +81,7 @@ The dependency chain is: conditional block-design extraction → project → blo
 
 • `vivado:xsa` — Export `gpgpu_platform.xsa` with the generated bitstream included, ready for a later Vitis platform flow.
 
-• `vivado:export-block-design` — Strictly export the current generated-project block design on explicit request. Unlike the conditional extraction task, this fails when the project/design is absent.
-
-• `vivado:all` — Conditionally extract an existing block design, then run the complete dependency chain through `.bit` and `.xsa` generation.
+• `vivado:all` — Run the complete dependency chain, preserving/exporting the saved block design or bootstrapping the default, through `.bit` and `.xsa` generation.
 
 [bold cyan]Vitis[/bold cyan]
 

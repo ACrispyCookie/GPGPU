@@ -24,9 +24,9 @@ Each command depends on the stage above it, so invoking a later stage runs any
 missing or out-of-date prerequisites automatically:
 
 ```text
-vivado:extract-block-design (when an existing project/BD is present)
-  └─ vivado:project
-       └─ vivado:block-design
+vivado:project
+  └─ vivado:block-design:build  (reuse/export saved BD, or bootstrap default)
+       └─ vivado:block-design:run  (generate products and HDL wrapper)
             └─ vivado:synthesis
                  └─ vivado:implementation
                       └─ vivado:bitstream
@@ -55,7 +55,7 @@ hardware:
 ```
 
 Each value must be a unique, 64-KiB-aligned 32-bit hexadecimal string. The
-task layer passes them to every Vivado stage and `vivado:block-design` applies
+task layer passes them to every Vivado stage and the block-design flow applies
 them to the matching `processing_system7_0/Data` address segments before BD
 validation and wrapper generation. Changing one address invalidates the Vivado
 command fingerprint and rebuilds downstream artifacts.
@@ -75,7 +75,8 @@ Run one stage with:
 
 ```bash
 ./gpgpu run vivado:project
-./gpgpu run vivado:block-design
+./gpgpu run vivado:block-design:build
+./gpgpu run vivado:block-design:run
 ./gpgpu run vivado:synthesis
 ./gpgpu run vivado:implementation
 ./gpgpu run vivado:bitstream
@@ -93,40 +94,52 @@ The aggregate command runs the complete chain through both output artifacts:
 ./gpgpu run vivado:all
 ```
 
-## Synchronizing GUI block-design changes
+## Default template and editable block design
 
 After opening `build/hardware/vivado/GPU/GPU.xpr` in Vivado, editing
 `gpgpu_block_design`, and saving the block design, close the GUI project before
 running `vivado:all`.
 
-At the start of the dependency chain, `vivado:extract-block-design` behaves as
-follows:
+`tools/hardware/vivado/create_block_design.tcl` is now the portable default /
+exported **design template**, not the orchestration driver. Separate Tcl drivers
+handle project setup, design preparation, export, and wrapper generation. The
+old design-specific template filename is no longer used.
 
-- if no generated project exists (for example, after a fresh clone), it keeps
-  and uses the committed `tools/hardware/vivado/gpgpu_block_design.tcl`;
-- if the project and `gpgpu_block_design.bd` exist, it runs `write_bd_tcl`,
-  normalizes the export, and atomically refreshes the committed Tcl only when
-  its content changed;
-- if the project contains a differently named `.bd`, it stops before project
-  recreation so an existing design cannot be deleted accidentally.
+`vivado:block-design:build` has two branches:
 
-The extraction task can also be invoked directly:
+- If the configured project already contains `gpgpu_block_design.bd`, reuse the
+  saved design rather than deleting/recreating it. Export its normalized Tcl
+  back to `create_block_design.tcl`, updating the template only when its content
+  differs.
+- If no saved block design exists, create the default design by sourcing the
+  template in the managed project. A differently named existing design is an
+  error rather than permission to silently replace it.
+
+`vivado:block-design:run` depends on `:build` and generates the output products
+and HDL wrapper, adds the wrapper to the project, and sets the top module. Here
+`:run` means wrapper/output-product generation, **not** simulation, synthesis,
+FPGA programming, or launching the GUI.
 
 ```bash
-./gpgpu run vivado:extract-block-design
+./gpgpu run vivado:block-design:build  # preserve/export or bootstrap the BD
+./gpgpu run vivado:block-design:run    # also generate products and wrapper
 ```
 
-The strict/manual equivalent remains available:
+The project stage preserves a valid saved BD as a normalized template before
+any destructive project recreation caused by RTL/configuration changes. If
+preservation/export fails, recreation stops before deleting the project.
 
-```bash
-./gpgpu run vivado:export-block-design
-```
+**Precedence:** an existing saved BD in the configured build root wins over
+manual edits to the template. A build can therefore modify a tracked source
+file. Review the template diff before committing; close Vivado first so that
+saved state and project locks are unambiguous. To use a manually changed default
+without overriding an editable project, use a fresh build root. Unsaved GUI
+changes cannot be exported by the CLI.
 
-Unlike the conditional extraction stage, the manual command reports an error
-if the configured project or block design does not exist. Both commands check
-for machine-specific absolute paths and compare normalized content rather than
-timestamps. `architecture.num_cores` remains config-owned and is normalized to
-`$::NUM_CORES` instead of being captured as a machine/project-specific value.
+The flow checks for machine-specific absolute paths and compares normalized
+content rather than timestamps. `architecture.num_cores` remains config-owned
+and is normalized to `$::NUM_CORES` instead of being captured as a
+machine/project-specific value.
 Likewise, exported concrete AXI GPIO offsets are normalized to the corresponding
 `$::HOST_*_GPIO` variables so a GUI export cannot replace configured addresses
 with one project's snapshot values.
@@ -136,7 +149,7 @@ warning and updates it atomically. If there is no difference, it reports that
 the Tcl is up to date. The comparison is content-based rather than timestamp-
 based.
 
-The task exports the project managed by this CLI. It does not guess or discover
+The flow exports the project managed by this CLI. It does not guess or discover
 unrelated Vivado projects elsewhere on the machine. `paths.build.root` is the
 only configurable filesystem path. All generated paths are derived from it, so
 a one-off external build root is selected with:

@@ -25,7 +25,7 @@ def test_progress_bar_counts_completed_and_cached_stages(tmp_path):
         "exit_code": None,
         "tasks": [
             {"task": "vivado:project", "status": "success", "duration_s": 2.0},
-            {"task": "vivado:block-design", "status": "up_to_date"},
+            {"task": "vivado:block-design:run", "status": "up_to_date"},
             {"task": "vivado:synthesis", "status": "running"},
             {"task": "vitis:build:host", "status": "not_run"},
         ],

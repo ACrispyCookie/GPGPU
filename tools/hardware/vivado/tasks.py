@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, TextIO
 
 from doit.tools import config_changed
@@ -62,9 +62,7 @@ _DESIGN_NAME_BLOCK = re.compile(
     r"variable design_name\s*\n"
     r"set design_name\s+\S+"
 )
-_NUM_CORES_PROPERTY = re.compile(
-    r"(CONFIG\.SP_PER_SM\s+)\{[^{}\r\n]+\}"
-)
+_NUM_CORES_PROPERTY = re.compile(r"(CONFIG\.SP_PER_SM\s+)\{[^{}\r\n]+\}")
 _HOST_ADDRESS_SEGMENTS = {
     "axi_gpio_address/S_AXI/Reg": "HOST_ADDRESS_GPIO",
     "axi_gpio_cmd/S_AXI/Reg": "HOST_CMD_GPIO",
@@ -136,17 +134,22 @@ def export_block_design(
     try:
         subprocess.run(command, cwd=cwd, check=True)
         if not raw_export.is_file():
-            raise RuntimeError(f"Vivado did not create the expected export: {raw_export}")
+            raise RuntimeError(
+                f"Vivado did not create the expected export: {raw_export}"
+            )
 
         normalized = normalize_exported_tcl(
             raw_export.read_text(encoding="utf-8"), repo_root, bd_name
         )
-        if re.search(
-            r"set\s+GPGPU_0\s+\[\s*create_bd_cell\s+"
-            r"-type\s+module\s+-reference\s+"
-            r"(?:GPGPU\s+GPGPU_0|\$block_name\s+\$block_cell_name)\s*\]",
-            normalized,
-        ) is None:
+        if (
+            re.search(
+                r"set\s+GPGPU_0\s+\[\s*create_bd_cell\s+"
+                r"-type\s+module\s+-reference\s+"
+                r"(?:GPGPU\s+GPGPU_0|\$block_name\s+\$block_cell_name)\s*\]",
+                normalized,
+            )
+            is None
+        ):
             raise RuntimeError(
                 "Vivado export is missing the GPGPU module-reference cell GPGPU_0; "
                 "refusing to overwrite the committed Tcl with an incomplete design."
@@ -176,7 +179,7 @@ def export_block_design(
         raw_export.unlink(missing_ok=True)
 
 
-def extract_block_design_if_present(
+def _preserve_block_design_if_present(
     command: list[str],
     cwd: Path,
     project_file: Path,
@@ -191,6 +194,13 @@ def extract_block_design_if_present(
 
     output: TextIO = terminal or sys.__stderr__ or sys.stderr
     if not project_file.is_file():
+        orphan_designs = sorted(project_file.parent.rglob("*.bd"))
+        if orphan_designs:
+            raise RuntimeError(
+                "Vivado project is missing but saved block designs remain; "
+                "refusing to delete orphan designs: "
+                + ", ".join(str(path) for path in orphan_designs)
+            )
         if not committed_export.is_file():
             raise RuntimeError(
                 f"Neither the Vivado project nor committed block-design Tcl exists: "
@@ -204,7 +214,7 @@ def extract_block_design_if_present(
         return
 
     if not bd_file.is_file():
-        existing_designs = sorted(bd_file.parents[1].glob("*/*.bd"))
+        existing_designs = sorted(project_file.parent.rglob("*.bd"))
         if existing_designs:
             found = ", ".join(path.name for path in existing_designs)
             raise RuntimeError(
@@ -233,6 +243,70 @@ def extract_block_design_if_present(
         bd_name,
         terminal=output,
     )
+
+
+def recreate_project_preserving_bd(
+    command: list[str],
+    cwd: Path,
+    project_dir: Path,
+    project_file: Path,
+    bd_file: Path,
+    export_command: list[str],
+    raw_export: Path,
+    template: Path,
+    repo_root: Path,
+    bd_name: str,
+) -> None:
+    """Fail closed before deleting generated state; preserve saved GUI edits."""
+    _preserve_block_design_if_present(
+        export_command,
+        cwd,
+        project_file,
+        bd_file,
+        raw_export,
+        template,
+        repo_root,
+        bd_name,
+    )
+    run_vivado(command, cwd, project_dir, recreate_project=True)
+    if not project_file.is_file():
+        raise RuntimeError(
+            f"Vivado did not create the expected project: {project_file}"
+        )
+
+
+def build_block_design(
+    command: list[str],
+    cwd: Path,
+    project_dir: Path,
+    bd_file: Path,
+    export_command: list[str],
+    raw_export: Path,
+    template: Path,
+    repo_root: Path,
+    bd_name: str,
+) -> None:
+    """Configure the saved BD (or bootstrap), then publish a validated template."""
+    run_vivado(command, cwd, project_dir)
+    if not bd_file.is_file():
+        raise RuntimeError(
+            f"Vivado did not create the expected block design: {bd_file}"
+        )
+    export_block_design(export_command, cwd, raw_export, template, repo_root, bd_name)
+
+
+def generate_block_design_wrapper(
+    command: list[str],
+    cwd: Path,
+    project_dir: Path,
+    wrapper_file: Path,
+) -> None:
+    """Generate products and require the configured wrapper output."""
+    run_vivado(command, cwd, project_dir)
+    if not wrapper_file.is_file():
+        raise RuntimeError(
+            f"Vivado did not create the expected wrapper: {wrapper_file}"
+        )
 
 
 def _source_files(rtl_root: Path) -> list[Path]:
@@ -285,8 +359,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     project_file = project_dir / f"{project_name}.xpr"
     bd_file = project_dir / f"{project_name}.srcs/sources_1/bd/{bd_name}/{bd_name}.bd"
     wrapper_file = (
-        project_dir
-        / f"{project_name}.gen/sources_1/bd/{bd_name}/hdl/{top_name}.v"
+        project_dir / f"{project_name}.gen/sources_1/bd/{bd_name}/hdl/{top_name}.v"
     )
     synthesis_checkpoint = project_dir / f"{project_name}.runs/synth_1/{top_name}.dcp"
     implementation_checkpoint = (
@@ -339,7 +412,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
 
     stage_commands = {
         "project": command("create_project.tcl"),
-        "block-design": command("create_block_design.tcl"),
+        "block-design": command("build_block_design.tcl"),
+        "wrapper": command("generate_block_design_wrapper.tcl"),
         "synthesis": command("synthesis.tcl"),
         "implementation": command("implementation.tcl"),
         "bitstream": command("bitstream.tcl"),
@@ -348,20 +422,22 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     }
     source_files = _source_files(rtl_root)
     common_script = scripts / "common.tcl"
-    exported_bd_script = scripts / f"{bd_name}.tcl"
+    exported_bd_script = scripts / "create_block_design.tcl"
     raw_bd_export = project_dir / ".gpgpu" / f"{bd_name}.raw.tcl"
 
     return [
         {
-            "name": "vivado:extract-block-design",
+            "name": "vivado:project",
             "actions": [
                 (
-                    extract_block_design_if_present,
+                    recreate_project_preserving_bd,
                     [
-                        stage_commands["export-block-design"],
+                        stage_commands["project"],
                         repo_root,
+                        project_dir,
                         project_file,
                         bd_file,
+                        stage_commands["export-block-design"],
                         raw_bd_export,
                         exported_bd_script,
                         repo_root,
@@ -371,22 +447,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             ],
             "file_dep": [
                 str(common_script),
-                str(scripts / "export_block_design.tcl"),
-            ],
-            "uptodate": [False],
-        },
-        {
-            "name": "vivado:project",
-            "actions": [
-                (
-                    run_vivado,
-                    [stage_commands["project"], repo_root, project_dir, True],
-                )
-            ],
-            "task_dep": ["vivado:extract-block-design"],
-            "file_dep": [
-                str(common_script),
                 str(scripts / "create_project.tcl"),
+                str(scripts / "export_block_design.tcl"),
                 *(str(path) for path in source_files),
                 str(xdc_file),
             ],
@@ -395,18 +457,52 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "clean": True,
         },
         {
-            "name": "vivado:block-design",
+            "name": "vivado:block-design:build",
             "actions": [
-                (run_vivado, [stage_commands["block-design"], repo_root, project_dir])
+                (
+                    build_block_design,
+                    [
+                        stage_commands["block-design"],
+                        repo_root,
+                        project_dir,
+                        bd_file,
+                        stage_commands["export-block-design"],
+                        raw_bd_export,
+                        exported_bd_script,
+                        repo_root,
+                        bd_name,
+                    ],
+                )
             ],
             "task_dep": ["vivado:project"],
             "file_dep": [
                 str(common_script),
-                str(scripts / "create_block_design.tcl"),
+                str(scripts / "build_block_design.tcl"),
+                str(scripts / "configure_block_design.tcl"),
+                str(scripts / "export_block_design.tcl"),
                 str(exported_bd_script),
             ],
-            "targets": [str(bd_file), str(wrapper_file)],
-            "uptodate": [config_changed({"command": stage_commands["block-design"]})],
+            "targets": [str(bd_file)],
+            "uptodate": [False],
+            "clean": True,
+        },
+        {
+            "name": "vivado:block-design:run",
+            "actions": [
+                (
+                    generate_block_design_wrapper,
+                    [stage_commands["wrapper"], repo_root, project_dir, wrapper_file],
+                )
+            ],
+            "task_dep": ["vivado:block-design:build"],
+            "file_dep": [
+                str(common_script),
+                str(scripts / "generate_block_design_wrapper.tcl"),
+                str(bd_file),
+                str(project_file),
+            ],
+            "targets": [str(wrapper_file)],
+            "uptodate": [config_changed({"command": stage_commands["wrapper"]})],
             "clean": True,
         },
         {
@@ -414,11 +510,15 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "actions": [
                 (run_vivado, [stage_commands["synthesis"], repo_root, project_dir])
             ],
-            "task_dep": ["vivado:block-design"],
+            "task_dep": ["vivado:block-design:run"],
             "file_dep": [
                 str(common_script),
                 str(scripts / "synthesis.tcl"),
                 str(wrapper_file),
+                str(bd_file),
+                str(project_file),
+                str(xdc_file),
+                *(str(path) for path in source_files),
             ],
             "targets": [str(synthesis_checkpoint)],
             "uptodate": [config_changed({"command": stage_commands["synthesis"]})],
@@ -436,9 +536,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                 str(synthesis_checkpoint),
             ],
             "targets": [str(implementation_checkpoint)],
-            "uptodate": [
-                config_changed({"command": stage_commands["implementation"]})
-            ],
+            "uptodate": [config_changed({"command": stage_commands["implementation"]})],
             "clean": True,
         },
         {
@@ -458,39 +556,19 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         },
         {
             "name": "vivado:xsa",
-            "actions": [
-                (run_vivado, [stage_commands["xsa"], repo_root, project_dir])
-            ],
+            "actions": [(run_vivado, [stage_commands["xsa"], repo_root, project_dir])],
             "task_dep": ["vivado:bitstream"],
             "file_dep": [
                 str(common_script),
                 str(scripts / "export_hardware.tcl"),
                 str(bitstream),
+                str(bd_file),
+                str(project_file),
+                str(implementation_checkpoint),
             ],
             "targets": [str(xsa)],
             "uptodate": [config_changed({"command": stage_commands["xsa"]})],
             "clean": True,
-        },
-        {
-            "name": "vivado:export-block-design",
-            "actions": [
-                (
-                    export_block_design,
-                    [
-                        stage_commands["export-block-design"],
-                        repo_root,
-                        raw_bd_export,
-                        exported_bd_script,
-                        repo_root,
-                        bd_name,
-                    ],
-                )
-            ],
-            "file_dep": [
-                str(common_script),
-                str(scripts / "export_block_design.tcl"),
-            ],
-            "uptodate": [False],
         },
         {
             "name": "vivado:all",

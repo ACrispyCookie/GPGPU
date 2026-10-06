@@ -1,5 +1,21 @@
 ## Create the GPGPU Block Design
 
+For the CLI flow, use:
+
+```bash
+./gpgpu run vivado:block-design:build
+./gpgpu run vivado:block-design:run
+```
+
+`:build` reuses and exports the saved BD from the managed build project, or
+creates the default from `tools/hardware/vivado/create_block_design.tcl`.
+`:run` depends on `:build` and generates the output products / HDL wrapper.
+The saved BD takes priority over template edits; close Vivado before running
+these commands and review any template changes before committing. See
+[Vivado CLI flow](vivado-cli.md) for preservation, configuration, and dependencies.
+
+The equivalent GUI setup is described below.
+
 1) IP Integrator > Create Block Design > `gpgpu_block_design`.
 
 2) Add the following blocks:

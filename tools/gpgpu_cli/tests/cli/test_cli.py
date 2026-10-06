@@ -282,13 +282,15 @@ def test_run_help_explains_task_names_and_common_workflows(
     vivado_index = result.stdout.index("Vivado")
     assert tests_index < vivado_index
     assert "vivado:project" in result.stdout
-    assert "vivado:block-design" in result.stdout
+    assert "vivado:block-design:build" in result.stdout
+    assert "vivado:block-design:run" in result.stdout
     assert "vivado:synthesis" in result.stdout
     assert "vivado:implementation" in result.stdout
     assert "vivado:bitstream" in result.stdout
     assert "vivado:xsa" in result.stdout
-    assert "vivado:extract-block-design" in result.stdout
-    assert "vivado:export-block-design" in result.stdout
+    assert "vivado:extract-block-design" not in result.stdout
+    assert "vivado:export-block-design" not in result.stdout
+    assert "create_block_design.tcl" in result.stdout
     assert "vivado:all" in result.stdout
     assert "dependency chain" in result.stdout
 
