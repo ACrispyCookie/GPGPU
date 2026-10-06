@@ -5,7 +5,12 @@ from __future__ import annotations
 import re
 
 import typer
+from rich.console import Console, Group
 from rich.markup import escape
+from rich.panel import Panel
+from rich.table import Table
+from rich.text import Text
+from typer.core import TyperCommand
 from src import run_logged_task
 
 from config import ConfigError, ResolvedConfig
@@ -97,7 +102,7 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 
 [bold cyan]FPGA[/bold cyan]
 
-• `fpga:upload` — SCP the existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM without building. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory` (defaults: `njason@192.168.1.13`, `/home/njason/upload`).
+• `fpga:upload` — SCP the existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM without building. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory`.
 """
 
 
@@ -115,9 +120,62 @@ def _format_task_help(text: str) -> str:
     return re.sub(r"`([^`]+)`", highlight, text)
 
 
+class TaskHelpCommand(TyperCommand):
+    """Keep argument help compact and render its catalog as real Rich tables."""
+
+    def format_help(self, ctx: typer.Context, formatter: object) -> None:
+        super().format_help(ctx, formatter)
+        console = Console()
+        blocks = []
+        table = None
+        # Blank paragraphs delimit headings, notes, and task entries. Multiline
+        # descriptions are kept together in a single table cell.
+        for paragraph in _TASK_HELP.split("\n\n")[2:]:
+            paragraph = " ".join(paragraph.splitlines()).strip()
+            if not paragraph:
+                continue
+            entry = re.fullmatch(r"• `([^`]+)` — (.+)", paragraph)
+            if entry:
+                if table is None:
+                    table = Table(
+                        box=None, expand=True, padding=(0, 1),
+                        header_style="bold", show_edge=False,
+                    )
+                    table.add_column(
+                        "Command", style="bold bright_green",
+                        width=0,
+                        overflow="fold",
+                    )
+                    table.add_column("Description", ratio=1, overflow="fold")
+                    blocks.append(table)
+                table.columns[0].width = min(
+                    max(table.columns[0].width or 0, len(entry[1])),
+                    max(12, console.width - 32),
+                )
+                description = Text.from_markup(_format_task_help(entry[2]))
+                if entry[1] == "fpga:upload" and isinstance(ctx.obj, ResolvedConfig):
+                    destination = ctx.obj.get("hardware.fpga.upload.destination", None)
+                    directory = ctx.obj.get("hardware.fpga.upload.directory", None)
+                    if destination is not None and directory is not None:
+                        description.append(" Configured values: ")
+                        # Append literal text: config values may contain Rich
+                        # markup or backticks and must never be interpreted.
+                        description.append(str(destination), style="yellow")
+                        description.append(", ")
+                        description.append(str(directory), style="yellow")
+                        description.append(".")
+                table.add_row(Text(entry[1]), description)
+            else:
+                table = None
+                if blocks:
+                    blocks.append(Text(""))
+                blocks.append(Text.from_markup(_format_task_help(paragraph)))
+        console.print(Panel(Group(*blocks), title="Possible values", border_style="dim"))
+
+
 def run(
     ctx: typer.Context,
-    task: str = typer.Argument(..., metavar="TASK", help=_format_task_help(_TASK_HELP)),
+    task: str = typer.Argument(..., metavar="TASK", help=_TASK_HELP.split("\n\n", 1)[0]),
     plain: bool = typer.Option(
         False, "--plain", help="Stream plain logs instead of the interactive build monitor."
     ),

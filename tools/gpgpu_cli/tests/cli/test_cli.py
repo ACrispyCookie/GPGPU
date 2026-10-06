@@ -241,7 +241,10 @@ def test_run_propagates_pydoit_failure_status(
     assert result.exit_code == 3
 
 
-def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> None:
+def test_run_help_explains_task_names_and_common_workflows(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("COLUMNS", "160")
     result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "--help"])
 
     assert result.exit_code == 0, result.output
@@ -290,6 +293,26 @@ def test_run_help_explains_task_names_and_common_workflows(tmp_path: Path) -> No
     assert "dependency chain" in result.stdout
 
 
+@pytest.mark.parametrize("width", [80, 120, 180])
+def test_run_help_aligns_task_descriptions_in_table_columns(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, width: int
+) -> None:
+    monkeypatch.setenv("COLUMNS", str(width))
+    result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Command" in result.stdout and "Description" in result.stdout
+    lines = result.stdout.splitlines()
+    build_line = next(line for line in lines if "software:programs:<program>:x86:build" in line)
+    run_line = next(line for line in lines if "software:programs:<program>:x86 " in line)
+    assert build_line.index("Build") == run_line.index("Build")
+    # Long descriptions stay in the right column, not underneath task names.
+    continuation = next(line for line in lines if "without running" in line)
+    assert continuation.index("without") >= build_line.index("Build")
+    assert all(len(line) <= width for line in lines)
+    assert "•" not in result.stdout
+
+
 def test_run_help_renders_code_references_without_literal_backticks(tmp_path: Path) -> None:
     result = runner.invoke(create_app(repo_root=make_repo(tmp_path)), ["run", "--help"])
 
@@ -318,6 +341,47 @@ def test_task_help_highlights_task_names_separately_from_references() -> None:
     assert task_style.bold and task_style.color.name == "bright_green"
     assert example_style.bold and example_style.color.name == "bright_green"
     assert reference_style.color.name == "yellow"
+
+
+@pytest.mark.parametrize("source", ["default", "profile", "local", "cli"])
+def test_run_help_uses_resolved_upload_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    monkeypatch.setenv("COLUMNS", "180")
+    repo = make_repo(tmp_path)
+    default = repo / "config/profiles/default.yaml"
+    default.write_text(
+        default.read_text() + "\nhardware:\n  fpga:\n    upload:\n"
+        "      destination: base@board\n      directory: /base/upload\n"
+    )
+    destination = f"{source}@board"
+    directory = f"/{source}/upload"
+    layer = {"hardware": {"fpga": {"upload": {
+        "destination": destination, "directory": directory,
+    }}}}
+    arguments = []
+    if source == "profile":
+        (repo / "config/profiles/board.yaml").write_text(json.dumps(layer))
+        arguments = ["--profile", "board"]
+    elif source == "local":
+        (repo / "config/local.yaml").write_text(json.dumps(layer))
+    elif source == "cli":
+        arguments = [
+            "--set", f"hardware.fpga.upload.destination={destination}",
+            "--set", f"hardware.fpga.upload.directory={directory}",
+        ]
+    else:
+        destination, directory = "base@board", "/base/upload"
+
+    result = runner.invoke(create_app(repo_root=repo), arguments + ["run", "--help"])
+
+    assert result.exit_code == 0, result.output
+    assert "Configured values:" in result.stdout
+    assert destination in result.stdout
+    assert directory in result.stdout
+    assert "njason@192.168.1.13" not in result.stdout
+    assert "/home/njason/upload" not in result.stdout
+    assert "defaults:" not in result.stdout
 
 
 def test_run_help_lists_fpga_upload_as_explicit_existing_artifact_operation(tmp_path: Path) -> None:
