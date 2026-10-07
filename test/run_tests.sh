@@ -4,7 +4,7 @@ ITERS=100
 MODE="standard"
 VISUALIZE=false
 TB_MODE="e2e"
-TB_FILE="tb_GPGPU_e2e.v"
+TB_FILE="tb_GPGPU_e2e.sv"
 RANGE_START=""
 RANGE_END=""
 
@@ -32,8 +32,8 @@ print_help() {
     echo "  -v,  --visualize         Open GTKWave after simulation"
     echo ""
     echo "Testbench selection:"
-    echo "       --tb smx            Use tb_GPGPU.v"
-    echo "       --tb e2e            Use tb_GPGPU_e2e.v"
+    echo "       --tb smx            Use tb_GPGPU.sv"
+    echo "       --tb e2e            Use tb_GPGPU_e2e.sv"
     echo "       --tb-file FILE      Use a custom testbench file"
     echo ""
     echo "UART options:"
@@ -117,10 +117,10 @@ while [[ "$#" -gt 0 ]]; do
             shift
             case "$TB_MODE" in
                 smx)
-                    TB_FILE="tb_GPGPU.v"
+                    TB_FILE="tb_GPGPU.sv"
                     ;;
                 e2e)
-                    TB_FILE="tb_GPGPU_e2e.v"
+                    TB_FILE="tb_GPGPU_e2e.sv"
                     ;;
                 *)
                     echo "Unknown --tb option: $TB_MODE"

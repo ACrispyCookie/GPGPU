@@ -6,7 +6,7 @@ all: testsuite
 # ==============================================================================
 
 # Default testbench
-TB ?= tb_GPGPU.v
+TB ?= tb_GPGPU.sv
 
 # Output executable
 OUT ?= main
@@ -15,12 +15,12 @@ OUT ?= main
 SRC_DIR := ../hw/gpgpu
 
 VERILOG_SOURCES := \
-	$(SRC_DIR)/*.vh \
-	$(SRC_DIR)/*.v \
-	$(SRC_DIR)/memory/*.v \
-	$(SRC_DIR)/sp/*.v
+	$(SRC_DIR)/*.svh \
+	$(SRC_DIR)/*.sv \
+	$(SRC_DIR)/memory/*.sv \
+	$(SRC_DIR)/sp/*.sv
 
-IVERILOG_FLAGS := -Wall -Wno-timescale -Winfloop -I $(SRC_DIR)
+IVERILOG_FLAGS := -g2012 -Wall -Wno-timescale -Winfloop -I $(SRC_DIR)
 
 UART_PORT ?= /dev/ttyACM0
 UART_BAUD ?= 115200

@@ -1,4 +1,4 @@
-`include "constants.vh"
+`include "constants.svh"
 
 module GPGPUControlPlane #(
     parameter SP_PER_SM = 32

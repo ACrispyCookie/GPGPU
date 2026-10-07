@@ -1,5 +1,5 @@
 `timescale 1ns/1ps
-`include "constants.vh"
+`include "constants.svh"
 
 `define CLOCK_PERIOD 10
 `define TEST_TIMEOUT_CYCLES 10000
