@@ -241,7 +241,9 @@ class RunLogReporter(ConsoleReporter):
                 return
             visited.add(task_name)
             task = tasks[task_name]
-            for dependency in task.task_dep:
+            # Setup tasks execute after regular prerequisites and before the
+            # requested action; include them in the same ordered stage plan.
+            for dependency in (*task.task_dep, *task.setup_tasks):
                 visit(dependency)
             if task.actions:
                 planned.append(task)

@@ -162,3 +162,56 @@ def test_validation_warns_about_options_not_declared_by_default_profile(tmp_path
 
     assert report.valid
     assert any("unexpected.option" in warning for warning in report.warnings)
+
+
+@pytest.mark.parametrize("override", [None, "hardware.fpga.agent.directory=/srv/board_files"])
+def test_actual_default_profile_accepts_optional_agent_directory(tmp_path: Path, override: str | None) -> None:
+    import shutil
+
+    default = Path(__file__).resolve().parents[4] / "config/profiles/default.yaml"
+    target = tmp_path / "config/profiles/default.yaml"
+    target.parent.mkdir(parents=True)
+    shutil.copy2(default, target)
+    config = resolve_config(tmp_path, overrides=[] if override is None else [override])
+
+    report = validate_config(config)
+
+    assert report.valid, report.errors
+
+
+@pytest.mark.parametrize("value", ["42", "false", "[]", "{}"])
+def test_optional_agent_directory_rejects_non_string_overrides(tmp_path: Path, value: str) -> None:
+    repo = make_repo(tmp_path)
+    default = repo / "config/profiles/default.yaml"
+    with default.open("a", encoding="utf-8") as file:
+        file.write("\nhardware:\n  fpga:\n    agent:\n      directory: null\n")
+    report = validate_config(resolve_config(repo, overrides=[f"hardware.fpga.agent.directory={value}"]))
+
+    assert not report.valid
+    assert "hardware.fpga.agent.directory" in report.errors[0]
+
+
+def test_required_option_still_rejects_null(tmp_path: Path) -> None:
+    report = validate_config(resolve_config(make_repo(tmp_path), overrides=["tools.make.command=null"]))
+
+    assert "Missing value: tools.make.command is null" in report.errors
+
+
+def test_doctor_accepts_actual_default_profile_with_nullable_agent_directory(tmp_path: Path, monkeypatch) -> None:
+    import shutil
+    from cli.cli import create_app
+    from typer.testing import CliRunner
+    from test_cli import make_repo as make_cli_repo
+
+    repo = make_cli_repo(tmp_path)
+    shutil.copy2(
+        Path(__file__).resolve().parents[4] / "config/profiles/default.yaml",
+        repo / "config/profiles/default.yaml",
+    )
+    monkeypatch.setattr(shutil, "which", lambda command: f"/fake-tools/{command}")
+
+    result = CliRunner().invoke(create_app(repo_root=repo), ["doctor"])
+
+    assert result.exit_code == 0, result.output
+    assert "Errors: 0" in result.output
+    assert "is null" not in result.output

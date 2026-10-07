@@ -52,7 +52,7 @@ def test_upload_transfers_existing_artifacts_with_default_remote_filenames(tmp_p
     materialize(config)
     calls = []
     monkeypatch.setattr(subprocess, "run", lambda argv, **kwargs: calls.append((argv, kwargs)))
-    task, = fpga_module().create_tasks(config)
+    task = next(task for task in fpga_module().create_tasks(config) if task["name"] == "fpga:upload")
 
     execute(task)
 
@@ -71,7 +71,7 @@ def test_missing_artifact_is_reported_before_any_network_transfer(tmp_path, monk
     missing.unlink()
     calls = []
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: calls.append(args))
-    task, = fpga_module().create_tasks(config)
+    task = next(task for task in fpga_module().create_tasks(config) if task["name"] == "fpga:upload")
 
     with pytest.raises(FileNotFoundError, match=str(missing)):
         execute(task)
@@ -79,8 +79,22 @@ def test_missing_artifact_is_reported_before_any_network_transfer(tmp_path, monk
     assert calls == []
 
 
+def test_program_preflight_graph_has_no_build_upload_or_file_dependencies(tmp_path):
+    tasks = {task['name']: task for task in fpga_module().create_tasks(upload_config(tmp_path))}
+    assert tasks['fpga:program']['task_dep'] == ['fpga:program:reset']
+    assert tasks['fpga:program']['setup'] == ['fpga:mode:project']
+    assert tasks['fpga:program:reset']['task_dep'] == ['fpga:preflight']
+    assert tasks['fpga:preflight']['task_dep'] == []
+    assert tasks['fpga:reset']['task_dep'] == []
+    assert tasks['fpga:program:reset']['actions'] == tasks['fpga:reset']['actions']
+    for name in ('fpga:preflight', 'fpga:program:reset', 'fpga:program'):
+        assert tasks[name]['uptodate'] == [False]
+        assert tasks[name].get('file_dep', []) == []
+        assert tasks[name].get('targets', []) == []
+
+
 def test_upload_is_always_requested_without_build_dependencies(tmp_path):
-    task, = fpga_module().create_tasks(upload_config(tmp_path))
+    task = next(task for task in fpga_module().create_tasks(upload_config(tmp_path)) if task["name"] == "fpga:upload")
 
     assert task["name"] == "fpga:upload"
     assert task["task_dep"] == []
@@ -187,7 +201,7 @@ def test_configured_artifact_names_are_validated_only_at_action_time(tmp_path, m
     calls = []
     monkeypatch.setattr(subprocess, "run", lambda *args, **kwargs: calls.append(args))
 
-    task, = fpga_module().create_tasks(config)
+    task = next(task for task in fpga_module().create_tasks(config) if task["name"] == "fpga:upload")
     with pytest.raises(ValueError, match=key):
         execute(task)
 

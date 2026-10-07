@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import shlex
 import subprocess
 from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING, Any
@@ -49,6 +51,114 @@ def upload_artifacts(
         subprocess.run([command, "--", str(source), remote], cwd=cwd, check=True)
 
 
+def _validated_string(config: ResolvedConfig, key: str, pattern: str, contract: str) -> str:
+    value = config.get(key, None)
+    if not isinstance(value, str) or not re.fullmatch(pattern, value):
+        raise ValueError(f"{key} must be {contract}")
+    return value
+
+
+def _validated_path(config: ResolvedConfig, key: str) -> str:
+    value = _validated_string(config, key, r"/[A-Za-z0-9_./-]*", "an absolute safe POSIX path without traversal")
+    if any(part in (".", "..") for part in value.split("/")):
+        raise ValueError(f"{key} must be an absolute safe POSIX path without traversal")
+    return value
+
+
+def run_shortcuts(
+    config: ResolvedConfig, script: str, *, check_response: bool = False, select_device: bool = True,
+) -> None:
+    """Run installed VM shell helpers in an interactive Bash session."""
+    command = _validated_string(config, "tools.ssh.command", r"(?!-)[A-Za-z0-9_./-]+", "a single nonempty executable without arguments")
+    destination = _validated_string(
+        config, "hardware.fpga.upload.destination",
+        r"(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*@)?[A-Za-z0-9_.][A-Za-z0-9_.-]*",
+        "a safe SSH hostname or user@hostname",
+    )
+    device = _validated_string(config, "hardware.fpga.agent.device", r"[A-Za-z0-9_][A-Za-z0-9_.-]*", "a nonempty safe device identifier")
+    selection = f"{shlex.join(['fuse', device])} >/dev/null; " if select_device else ""
+    script = f"set -e; set -o pipefail; {selection}{script}"
+    argv = [
+        command, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10",
+        "--", destination, shlex.join(["bash", "-ic", script]),
+    ]
+    if not check_response:
+        subprocess.run(argv, cwd=config.repo_root, check=True, text=True)
+        return
+    # Preserve live logs, but also inspect Agent HTTP-error bodies: the installed
+    # shortcuts can print {"detail": ...} while returning shell exit status zero.
+    output: list[str] = []
+    with subprocess.Popen(argv, cwd=config.repo_root, stdout=subprocess.PIPE, text=True) as process:
+        assert process.stdout is not None
+        for line in process.stdout:
+            print(line, end="", flush=True)
+            output.append(line)
+        returncode = process.wait()
+    response_text = "".join(output)
+    if returncode:
+        raise subprocess.CalledProcessError(returncode, argv, output=response_text)
+    # Decode JSON objects even alongside helper banners or pretty-printed output.
+    decoder = json.JSONDecoder()
+    for match in re.finditer(r"\{", response_text):
+        try:
+            response, _ = decoder.raw_decode(response_text, match.start())
+        except json.JSONDecodeError:
+            continue
+        if isinstance(response, dict) and "detail" in response:
+            raise RuntimeError(f"FPGA Agent rejected {script}: {response['detail']}")
+
+
+def reset_board(config: ResolvedConfig) -> None:
+    # fr itself reads and preserves the current mode, including lowercase modes.
+    run_shortcuts(config, shlex.join(["fr"]))
+
+
+def set_mode(config: ResolvedConfig, mode: str) -> None:
+    if mode not in ("project", "demo"):
+        raise ValueError("FPGA mode must be project or demo")
+    run_shortcuts(config, shlex.join(["fm", mode]))
+
+
+def _program_inputs(config: ResolvedConfig) -> tuple[str, tuple[str, str, str]]:
+    """Validate the whole programming path/name batch before board prerequisites."""
+    directory_key = (
+        "hardware.fpga.upload.directory" if config.get("hardware.fpga.agent.directory") is None
+        else "hardware.fpga.agent.directory"
+    )
+    directory = _validated_path(config, directory_key)
+    platform = _validated_string(config, "hardware.vitis.platform_name", r"[A-Za-z0-9_][A-Za-z0-9_.-]*", "a nonempty safe single basename")
+    host = _validated_string(config, "hardware.vitis.host_name", r"[A-Za-z0-9_][A-Za-z0-9_.-]*", "a nonempty safe single basename")
+    return directory, (f"{platform}.bit", "ps7_init.tcl", f"{host}.elf")
+
+
+def preflight_board(config: ResolvedConfig) -> None:
+    """Read-only existence check of all uploaded VM files, not Agent mounts."""
+    _, names = _program_inputs(config)
+    upload_directory = _validated_path(config, "hardware.fpga.upload.directory")
+    paths = [str(PurePosixPath(upload_directory) / name) for name in names]
+    script = (
+        "missing=0; for artifact in " + shlex.join(paths) + "; do "
+        'if test -f "$artifact"; then :; else '
+        'printf "Missing FPGA uploaded artifact (not a file): %s\\n" "$artifact"; '
+        "missing=1; fi; done; exit \"$missing\""
+    )
+    run_shortcuts(config, script, select_device=False)
+
+
+def program_board(config: ResolvedConfig) -> None:
+    """After preflight, reset and PROJECT setup, program PL before PS."""
+    directory, names = _program_inputs(config)
+    pl = shlex.join(["fpl", str(PurePosixPath(directory) / names[0])])
+    ps = shlex.join([
+        "fps", str(PurePosixPath(directory) / names[1]),
+        str(PurePosixPath(directory) / names[2]),
+    ])
+    # Separate checked responses ensure an HTTP error from PL prevents PS even
+    # if the installed helper incorrectly returns a successful shell status.
+    run_shortcuts(config, pl, check_response=True)
+    run_shortcuts(config, ps, check_response=True)
+
+
 def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create the independent FPGA task namespace, extensible with board commands."""
     paths = ProjectPaths.from_config(config)
@@ -78,5 +188,37 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     ],
                 )
             ],
-        }
+        },
+        {
+            "name": "fpga:reset", "task_dep": [], "uptodate": [False],
+            "actions": [(reset_board, [config])],
+        },
+        {
+            "name": "fpga:preflight", "task_dep": [], "uptodate": [False],
+            "actions": [(preflight_board, [config])],
+        },
+        {
+            "name": "fpga:program:reset", "task_dep": ["fpga:preflight"], "uptodate": [False],
+            "actions": [(reset_board, [config])],
+        },
+        {
+            # Setup runs after the preflight-scoped reset; standalone commands
+            # remain independent of uploaded artifacts.
+            "name": "fpga:program", "task_dep": ["fpga:program:reset"], "uptodate": [False],
+            "setup": ["fpga:mode:project"],
+            "actions": [(program_board, [config])],
+        },
+        {
+            # Setup is scheduled only after upload succeeds, including for this
+            # actionless aggregate. Reuse the unchanged program-only chain.
+            "name": "fpga:deploy", "task_dep": ["fpga:upload"], "uptodate": [False],
+            "setup": ["fpga:program"], "actions": [],
+        },
+        *[
+            {
+                "name": f"fpga:mode:{mode.lower()}", "task_dep": [], "uptodate": [False],
+                "actions": [(set_mode, [config, mode])],
+            }
+            for mode in ("project", "demo")
+        ],
     ]

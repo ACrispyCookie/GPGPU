@@ -99,7 +99,21 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 
 [bold cyan]FPGA[/bold cyan]
 
-• `fpga:upload` — SCP the existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM without building. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory`.
+• `fpga:upload` — Upload without building via SCP: existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory`.
+
+• `fpga:reset` — SSH to the Debian VM and run its installed `fr` shell shortcut through interactive Bash, preserving the current mode.
+
+• `fpga:mode:project` — Set PROJECT mode without resetting or programming.
+
+• `fpga:mode:demo` — Set DEMO mode without resetting or programming.
+
+• `fpga:preflight` — Read-only SSH `test -f` of all three files in the VM upload directory, with programming configuration validation before any board mutation. Does not prove Agent/container mount visibility.
+
+• `fpga:program:reset` — Programming-scoped reset after successful preflight; standalone `fpga:reset` remains independent of files.
+
+• `fpga:program` — Preflight all uploaded files → reset → PROJECT mode → program PL → initialize PS and run the host ELF. Missing/non-file inputs stop before reset or programming. No build or upload is triggered. Configure `hardware.fpga.agent.*` and `tools.ssh.command`.
+
+• `fpga:deploy` — Upload existing local artifacts → preflight → reset → PROJECT mode → program PL and PS. Upload failure stops before preflight or board mutation. No build is triggered; upload and programming repeat on every invocation.
 """
 
 

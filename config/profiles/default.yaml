@@ -4,6 +4,9 @@ architecture:
 hardware:
   fpga:
     part: xc7z020clg484-1
+    agent:
+      device: "210299730789"
+      directory: /app
     upload:
       destination: njason@192.168.1.13
       directory: /home/njason/upload
@@ -80,6 +83,9 @@ tools:
     required: false
   vitis:
     command: vitis
+    required: false
+  ssh:
+    command: ssh
     required: false
   scp:
     command: scp

@@ -199,6 +199,11 @@ def _validate_options(
                 errors.append(f"Invalid option type: {dotted} must be a mapping")
             else:
                 _validate_options(expected_value, actual_value, dotted, errors, warnings)
+        elif dotted == "hardware.fpga.agent.directory":
+            # This optional path uses null to inherit upload.directory. Its
+            # canonical null default cannot describe the valid string override.
+            if actual_value is not None and not isinstance(actual_value, str):
+                errors.append(f"Invalid option type: {dotted} must be str or null")
         elif actual_value is None:
             errors.append(f"Missing value: {dotted} is null")
         elif isinstance(actual_value, Mapping) or _value_kind(actual_value) is not _value_kind(expected_value):
