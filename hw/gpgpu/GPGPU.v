@@ -80,7 +80,7 @@ module GPGPUDevice #(
     );
 
     GPGPUController controller (
-        .clk(clk), .rst(rst_n),
+        .clk(clk), .rst_n(rst_n),
         .i_start(control_start), .i_stop(control_stop),
         .i_clear_stopped(clear_stopped), .i_core_complete(core_complete),
         .o_core_state(core_state), .o_stopped(stopped)

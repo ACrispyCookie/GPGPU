@@ -12,13 +12,13 @@ TB ?= tb_GPGPU.v
 OUT ?= main
 
 # Include/source directories
-SRC_DIR := ../hw
+SRC_DIR := ../hw/gpgpu
 
 VERILOG_SOURCES := \
 	$(SRC_DIR)/*.vh \
-	$(SRC_DIR)/gpgpu/*.v \
-	$(SRC_DIR)/gpgpu/memory/*.v \
-	$(SRC_DIR)/gpgpu/sp/*.v
+	$(SRC_DIR)/*.v \
+	$(SRC_DIR)/memory/*.v \
+	$(SRC_DIR)/sp/*.v
 
 IVERILOG_FLAGS := -Wall -Wno-timescale -Winfloop -I $(SRC_DIR)
 
@@ -41,7 +41,7 @@ expected:
 
 compile:
 	@echo "Compiling testbench: $(TB)"
-	iverilog $(IVERILOG_FLAGS) -o $(OUT) $(TB) $(VERILOG_SOURCES)
+	iverilog $(IVERILOG_FLAGS) $(EXTRA_FLAGS) -o $(OUT) $(TB) $(VERILOG_SOURCES)
 
 simulate: compile
 	vvp ./main | tee simulation.log
