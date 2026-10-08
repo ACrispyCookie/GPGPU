@@ -63,9 +63,9 @@
 `define TXD_REGISTER 5'h1F
 `define STACK_P_INIT 0
 
-`define CORE_LOADING 2'b00
-`define CORE_RUNNING 2'b01
-`define CORE_DUMPING 2'b10
+`define CORE_IDLE 2'b00
+`define CORE_RESET 2'b01
+`define CORE_RUNNING 2'b10
 
 `define FIFO_ENQ_DEQ 2'b11
 `define FIFO_ENQ 2'b10

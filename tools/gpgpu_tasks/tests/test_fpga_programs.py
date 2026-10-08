@@ -42,16 +42,11 @@ def driver():
 class FakeUart:
     def __init__(self):
         self.events = []
-        self.state = 'loading'
+        self.state = 'idle'
         self.words = {}
 
     def status(self):
-        return dict(loading=int(self.state == 'loading'), dumping=int(self.state == 'dumping'), running=0, busy=0, done=0)
-
-    def done(self):
-        self.events.append('done')
-        self.state = 'loading'
-        return 'Returned to loading state'
+        return dict(idle=int(self.state == 'idle'), running=int(self.state == 'running'), busy=0, done=0)
 
     def load_imem_bin(self, words, offset):
         assert offset == 0
@@ -68,21 +63,20 @@ class FakeUart:
 
     def run(self):
         self.events.append('run')
-        self.state = 'dumping'
-        return 'Core entered dumping state'
+        self.state = 'idle'
+        return 'Core entered idle state'
 
 
-def test_remote_load_verifies_then_run_returns_to_loading(tmp_path):
+def test_remote_load_verifies_then_run_returns_to_idle(tmp_path):
     ns = driver()
     path = tmp_path / 'instructions.mem'
     path.write_text('00008067\nABCDEF01\n')
     uart = FakeUart()
-    uart.state = 'dumping'
     words = ns['validated_words'](path)
     ns['execute_uart'](uart, 'load-imem', words)
     ns['execute_uart'](uart, 'run', words)
-    assert uart.events == ['done', 'load', 'verify', 'verify', 'run', 'done']
-    assert uart.state == 'loading'
+    assert uart.events == ['load', 'verify', 'verify', 'run']
+    assert uart.state == 'idle'
     assert uart.words == {0: '00008067', 1: 'abcdef01'}
 
 
@@ -96,17 +90,30 @@ def test_preflight_rejects_invalid_memory(tmp_path, content):
 
 
 @pytest.mark.parametrize('status', [
-    {}, dict(loading=1, running=1, dumping=0, busy=0),
-    dict(loading=1, running=0, dumping=0, busy=1),
-    dict(loading=0, running=0, dumping=0, busy=0),
-    dict(loading=1, running=0, dumping=1, busy=0),
-    dict(loading=1, running=0, dumping=0, busy=0, text='ERROR'),
+    {}, dict(idle=1, running=1, busy=0, done=0),
+    dict(idle=1, running=0, busy=1, done=0),
+    dict(idle=0, running=0, busy=0, done=0),
+    dict(idle=True, running=0, busy=0, done=0),
+    dict(idle=1, running=0, busy=0, done=2),
+    dict(idle=1, running=0, busy=0),
+    dict(idle=1, running=0, busy=0, done=0, text='ERROR'),
+    dict(loading=1, running=0, dumping=0, busy=0, done=0),
 ])
 def test_bad_state_never_mutates_uart(status):
     uart = FakeUart()
     uart.status = lambda: status
     with pytest.raises(RuntimeError, match='status|state'):
         driver()['execute_uart'](uart, 'load-imem', ['00008067'])
+    assert uart.events == []
+
+
+def test_legacy_status_from_real_parser_requires_new_host_without_mutation():
+    ns = driver()
+    text = 'STATUS = 0x00000001\nloading = 1\nrunning = 0\ndumping = 0\nbusy = 0\ndone = 0\ngpgpu>'
+    uart = FakeUart()
+    uart.status = lambda: ns['parse_status'](text)
+    with pytest.raises(RuntimeError, match='legacy UART status.*'):
+        ns['execute_uart'](uart, 'load-imem', ['00008067'])
     assert uart.events == []
 
 
@@ -192,12 +199,17 @@ def test_run_help_lists_uart_program_chain(tmp_path, monkeypatch):
     assert 'hardware.fpga.uart' in result.output
 
 
-def test_run_refuses_false_done_transition():
+def test_run_refuses_false_idle_transition():
     uart = FakeUart()
     uart.words = {0: '00008067'}
-    uart.done = lambda: 'Returned to loading state'
-    with pytest.raises(RuntimeError, match='loading state'):
+    def still_running():
+        uart.events.append('run')
+        uart.state = 'running'
+        return 'Core entered idle state'
+    uart.run = still_running
+    with pytest.raises(RuntimeError, match='status|idle'):
         driver()['execute_uart'](uart, 'run', ['00008067'])
+    assert uart.events == ['verify', 'run']
 
 
 @pytest.mark.parametrize('failure', ['', 'load-imem'])

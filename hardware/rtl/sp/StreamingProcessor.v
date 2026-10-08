@@ -48,6 +48,9 @@ module StreamingProcessor #(
     output o_core_complete
 );
 
+    reg [31:0] exmem_alu_out;
+    reg mul3_valid;
+
     //! =========================================================================
     //! STAGE 3: EXECUTE
     //! =========================================================================
@@ -125,7 +128,7 @@ module StreamingProcessor #(
     //? =========================
     reg [31:0] mul1_program_counter, mul2_program_counter, mul3_program_counter;
     reg [4:0] mul1_rd, mul2_rd, mul3_rd;
-    reg mul1_valid, mul2_valid, mul3_valid;
+    reg mul1_valid, mul2_valid;
 
     always @(posedge clk) begin
         if (!rst) begin
@@ -185,7 +188,7 @@ module StreamingProcessor #(
     //* =========================================================================
     //* PIPELINE REGISTER 3: EXECUTE -> MEMORY
     //* =========================================================================
-    reg [31:0] exmem_alu_out, exmem_reg_b;
+    reg [31:0] exmem_reg_b;
     reg [31:0] exmem_program_counter;
     reg [6:0] exmem_opcode;
     reg [1:0] exmem_instr_type;

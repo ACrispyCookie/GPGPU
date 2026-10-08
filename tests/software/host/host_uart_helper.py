@@ -49,8 +49,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("help", help="Print monitor help")
     sub.add_parser("status", help="Read and print monitor/core status")
-    sub.add_parser("run", help="Start the GPGPU and wait for dumping state")
-    sub.add_parser("done", help="Send READ_DONE and wait for loading state")
+    sub.add_parser("run", help="Start the GPGPU and wait for idling state")
 
     p = sub.add_parser("read-imem", help="Read one IMEM word")
     p.add_argument("addr", type=int, help="IMEM word address")
@@ -123,9 +122,6 @@ def main():
 
             elif args.command == "run":
                 print(uart.run(), end="")
-
-            elif args.command == "done":
-                print(uart.done(), end="")
 
             elif args.command == "read-imem":
                 print(f"IMEM[{args.addr}] = 0x{uart.read_imem(args.addr)}")

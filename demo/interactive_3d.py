@@ -484,10 +484,7 @@ class FpgaNbody3DBackend(Backend):
         start = time.perf_counter()
         self._load_kernel_args(steps=steps)
         self.uart.run()
-        try:
-            positions = self._read_positions()
-        finally:
-            self.uart.done()
+        positions = self._read_positions()
         self.step_count += steps
         elapsed_ms = (time.perf_counter() - start) * 1000.0
         return Frame(

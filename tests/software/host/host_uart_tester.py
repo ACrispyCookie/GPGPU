@@ -116,9 +116,6 @@ def main():
 
             errors = compare_dmem(test_idx, dmem, expected, check_count=check_count, offset=args.dmem_offset)
 
-            print("[INFO] Sending done...")
-            uart.done()
-
             if errors == 0:
                 print(f"[PASS] test{test_idx}")
             else:

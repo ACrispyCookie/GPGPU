@@ -103,7 +103,7 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 
 • `fpga:programs:<program>:load-imem` — After upload, binary-load and verify IMEM through the VM UART monitor. Configure `hardware.fpga.uart.*`; no reset, mode change or board programming.
 
-• `fpga:programs:<program>:run` — After verified IMEM load, launch once and return to loading with done. DMEM is retained; no adapter initialization, CSV or visualization.
+• `fpga:programs:<program>:run` — After verified IMEM load, launch once and verify return to idle. DMEM is retained; no adapter initialization, CSV or visualization.
 
 • `fpga:programs:<program>:all` — RISC-V build → mem → upload → load-imem → run. Remote actions repeat on every invocation.
 

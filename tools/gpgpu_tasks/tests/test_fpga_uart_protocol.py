@@ -45,7 +45,7 @@ def test_run_rechecks_imem_to_prevent_cross_session_program_mixup():
 
     class WrongProgramUart:
         def status(self):
-            return dict(loading=1, running=0, dumping=0, busy=0)
+            return dict(idle=1, running=0, busy=0, done=0)
 
         def dump_imem_ascii(self, count, offset):
             events.append('verify')
@@ -53,11 +53,8 @@ def test_run_rechecks_imem_to_prevent_cross_session_program_mixup():
 
         def run(self):
             events.append('run')
-            return 'Core entered dumping state'
+            return 'Core entered idle state'
 
-        def done(self):
-            events.append('done')
-            return 'Returned to loading state'
 
     with pytest.raises(RuntimeError, match='readback|IMEM'):
         driver.execute_uart(WrongProgramUart(), 'run', ['00008067'])
@@ -76,7 +73,7 @@ def test_vm_driver_consumes_bulk_load_prompt_before_readback(tmp_path, remote_en
     master, slave = pty.openpty()
     tty.setraw(slave)
     stop = threading.Event()
-    state = {"memory": [], "commands": [], "dumping": False}
+    state = {"memory": [], "commands": [], "idle": True}
 
     def host():
         pending = bytearray()
@@ -108,13 +105,10 @@ def test_vm_driver_consumes_bulk_load_prompt_before_readback(tmp_path, remote_en
                     offset, size = map(int, command.split()[1:])
                     reply = "".join(f"{i}: {state['memory'][i]:08x}\n" for i in range(offset, offset + size)) + "gpgpu> "
                 elif command == "run":
-                    state["dumping"] = True
-                    reply = "Core entered dumping state\ngpgpu> "
-                elif command == "done":
-                    state["dumping"] = False
-                    reply = "Returned to loading state\ngpgpu> "
+                    state["idle"] = True
+                    reply = "Core entered idle state\ngpgpu> "
                 else:
-                    reply = f"STATUS=0x1 loading={int(not state['dumping'])} running=0 dumping={int(state['dumping'])} busy=0 done=0\ngpgpu> "
+                    reply = "STATUS=0x1 idle=1 running=0 busy=0 done=0\ngpgpu> "
                 os.write(master, reply.encode())
 
     worker = threading.Thread(target=host, daemon=True)
@@ -131,10 +125,10 @@ def test_vm_driver_consumes_bulk_load_prompt_before_readback(tmp_path, remote_en
                 driver.execute_uart(uart, "load-imem", ["00100093", "00008067"])
                 driver.execute_uart(uart, "run", ["00100093", "00008067"])
         assert state["memory"] == [0x00100093, 0x00008067]
-        assert not state["dumping"]
+        assert state["idle"]
         assert "dumpimem 0 2" in state["commands"]
         assert state["commands"].count("run") == 1
-        assert state["commands"].count("done") == 1
+        assert "done" not in state["commands"]
     finally:
         stop.set()
         worker.join(2)

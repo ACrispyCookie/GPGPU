@@ -71,24 +71,26 @@ def validated_words(path):
 def checked_state(uart):
     """Fail closed on incomplete, contradictory or running/busy status."""
     status = uart.status()
-    keys = ('loading', 'running', 'dumping', 'busy')
+    if any(re.search(rf'\b{name}\s*=', str(status.get('text', '')))
+           for name in ('loading', 'dumping')) or any(name in status for name in ('loading', 'dumping')):
+        raise RuntimeError(
+            'Incompatible legacy UART status (loading/dumping). Build and deploy '
+            'matching idle/running PL and host ELF before loading programs. '
+            f'Status: {status}'
+        )
+    keys = ('idle', 'running', 'busy', 'done')
     if (any(type(status.get(key)) is not int or status[key] not in (0, 1) for key in keys)
             or 'ERROR' in str(status.get('text', ''))
-            or status['busy'] or status['running']
-            or status['loading'] + status['dumping'] != 1):
+            or status['busy'] or status['running'] or status['idle'] != 1):
         raise RuntimeError(f'Unsafe or malformed UART status: {status}')
-    return 'loading' if status['loading'] else 'dumping'
+    return 'idle'
 
 
 def execute_uart(uart, operation, words):
     """One guarded IMEM load/readback or single launch; never initialize DMEM."""
     if operation not in ('load-imem', 'run'):
         raise ValueError('Unknown UART operation')
-    state = checked_state(uart)
-    if state == 'dumping':
-        print(uart.done(), flush=True)
-        if checked_state(uart) != 'loading':
-            raise RuntimeError('UART did not return to loading state')
+    checked_state(uart)
     if operation == 'load-imem':
         print(uart.load_imem_bin(words, offset=0), flush=True)
         # The shared binary loader stops at its completion marker, not the
@@ -103,6 +105,4 @@ def execute_uart(uart, operation, words):
         if uart.dump_imem_ascii(len(words), offset=0) != dict(enumerate(words)):
             raise RuntimeError('IMEM readback mismatch before run')
         print(uart.run(), flush=True)
-        print(uart.done(), flush=True)
-        if checked_state(uart) != 'loading':
-            raise RuntimeError('UART did not return to loading state')
+        checked_state(uart)

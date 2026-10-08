@@ -12,19 +12,17 @@ module tb_GPGPU_e2e ();
     // Host command encodings
     localparam CMD_IMEM_WRITE = 3'd0;
     localparam CMD_DMEM_WRITE = 3'd1;
-    localparam CMD_WRITE_DONE = 3'd2;
-    localparam CMD_DMEM_READ  = 3'd3;
-    localparam CMD_IMEM_READ  = 3'd4;
-    localparam CMD_REG_READ   = 3'd5;
-    localparam CMD_READ_DONE  = 3'd6;
+    localparam CMD_DMEM_READ = 3'd2;
+    localparam CMD_IMEM_READ = 3'd3;
+    localparam CMD_REG_READ = 3'd4;
+    localparam CMD_RUN = 3'd5;
     localparam RET_INSTR = 32'h00008067;
 
     reg clk_in;
     reg rst;
 
-    wire o_loading;
+    wire o_idle;
     wire o_running;
-    wire o_dumping;
 
     reg [2:0]  host_command;
     reg        host_command_valid;
@@ -67,9 +65,8 @@ module tb_GPGPU_e2e ();
         .clk_in(clk_in),
         .rst(rst),
 
-        .o_loading(o_loading),
+        .o_idle(o_idle),
         .o_running(o_running),
-        .o_dumping(o_dumping),
 
         .i_host_command(host_command),
         .i_host_command_valid(host_command_valid),
@@ -221,13 +218,7 @@ module tb_GPGPU_e2e ();
 
     task start_core;
         begin
-            send_command(CMD_WRITE_DONE, 32'b0, 32'b0);
-        end
-    endtask
-
-    task finish_dumping;
-        begin
-            send_command(CMD_READ_DONE, 32'b0, 32'b0);
+            send_command(CMD_RUN, 32'b0, 32'b0);
         end
     endtask
 
@@ -327,8 +318,8 @@ module tb_GPGPU_e2e ();
             rst = 1'b1;
             repeat (20) @(posedge clk_in);
 
-            if (o_loading !== 1'b1) begin
-                $display("  [WARNING] GPGPU did not enter loading state after reset.");
+            if (o_idle !== 1'b1) begin
+                $display("  [WARNING] GPGPU did not enter idle state after reset.");
             end
 
             // ----------------------------------------------------
@@ -385,11 +376,11 @@ module tb_GPGPU_e2e ();
             start_core();
 
             // ----------------------------------------------------
-            // Wait for dumping state
+            // Wait for idle state
             // ----------------------------------------------------
             cycle_count = 0;
 
-            while (o_dumping !== 1'b1 && cycle_count < `TEST_TIMEOUT_CYCLES) begin
+            while (o_idle !== 1'b1 && cycle_count < `TEST_TIMEOUT_CYCLES) begin
                 @(posedge clk_in);
                 cycle_count = cycle_count + 1;
             end
@@ -398,7 +389,7 @@ module tb_GPGPU_e2e ();
                 $display("  [WARNING] Test %0d reached timeout of %0d cycles!",
                          test_idx, `TEST_TIMEOUT_CYCLES);
             end else begin
-                $display("[INFO]  Core reached dumping state in %0d cycles.", cycle_count);
+                $display("[INFO]  Core reached idle state in %0d cycles.", cycle_count);
             end
 
             repeat (10) @(posedge clk_in);
@@ -419,11 +410,6 @@ module tb_GPGPU_e2e ();
                     dmem_errors = dmem_errors + 1;
                 end
             end
-
-            // ----------------------------------------------------
-            // Return controller to loading state
-            // ----------------------------------------------------
-            finish_dumping();
 
             // ----------------------------------------------------
             // Verdict

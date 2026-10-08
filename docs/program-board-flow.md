@@ -30,7 +30,7 @@ The equivalent GUI setup is described below.
 - 1 x Inline Concat
 - 1 x the GPGPU RTL design (drag and drop).
 
-3) Connect `GPGPU_0`'s wires `o_loading`, `o_running`, `o_dumping`, `o_host_busy`, `o_host_done` to the Inline Concat Block (5 inputs, 1 output), and connect its output to `axi_gpio_status/gpio_io_i`.
+3) Connect `GPGPU_0`'s wires `o_idle`, `o_running`, `o_host_busy`, `o_host_done` to the Inline Concat Block inputs 0–3, respectively (4 inputs, 1 output), and connect its output to `axi_gpio_status/gpio_io_i` (4 bits).
 
 4) Connect `axi_gpio_cmd/gpio_io_o` output to the first Inline Slice block: Din Width 4, Din From 2, Din Down To 0, Dout Width 3, and connect the `axi_gpio_cmd/gpio_io_o` output to the second Inline Slice block: Din Width 4, Din From 3, Din Down To 3, Dout Width 1.
 

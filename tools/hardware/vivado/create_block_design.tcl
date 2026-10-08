@@ -242,8 +242,8 @@ proc create_root_design { parentCell } {
 
 
   # Create ports
-  set o_loading_0 [ create_bd_port -dir O o_loading_0 ]
-  set o_dumping_0 [ create_bd_port -dir O o_dumping_0 ]
+  set o_idle_0 [ create_bd_port -dir O o_idle_0 ]
+  set o_running_0 [ create_bd_port -dir O o_running_0 ]
 
   # Create instance: GPGPU_0, and set properties
   set block_name GPGPU
@@ -335,7 +335,7 @@ proc create_root_design { parentCell } {
   set axi_gpio_status [ create_bd_cell -type ip -vlnv xilinx.com:ip:axi_gpio:2.0 axi_gpio_status ]
   set_property -dict [list \
     CONFIG.C_ALL_INPUTS {1} \
-    CONFIG.C_GPIO_WIDTH {5} \
+    CONFIG.C_GPIO_WIDTH {4} \
   ] $axi_gpio_status
 
 
@@ -358,7 +358,7 @@ proc create_root_design { parentCell } {
 
   # Create instance: ilconcat_0, and set properties
   set ilconcat_0 [ create_bd_cell -type inline_hdl -vlnv xilinx.com:inline_hdl:ilconcat:1.0 ilconcat_0 ]
-  set_property CONFIG.NUM_PORTS {5} $ilconcat_0
+  set_property CONFIG.NUM_PORTS {4} $ilconcat_0
 
 
   # Create instance: axi_smc, and set properties
@@ -381,19 +381,17 @@ proc create_root_design { parentCell } {
   connect_bd_intf_net -intf_net processing_system7_0_UART_0 [get_bd_intf_ports UART_0_0] [get_bd_intf_pins processing_system7_0/UART_0]
 
   # Create port connections
-  connect_bd_net -net GPGPU_0_o_dumping  [get_bd_pins GPGPU_0/o_dumping] \
-  [get_bd_ports o_dumping_0] \
-  [get_bd_pins ilconcat_0/In2]
   connect_bd_net -net GPGPU_0_o_host_busy  [get_bd_pins GPGPU_0/o_host_busy] \
-  [get_bd_pins ilconcat_0/In3]
+  [get_bd_pins ilconcat_0/In2]
   connect_bd_net -net GPGPU_0_o_host_done  [get_bd_pins GPGPU_0/o_host_done] \
-  [get_bd_pins ilconcat_0/In4]
+  [get_bd_pins ilconcat_0/In3]
   connect_bd_net -net GPGPU_0_o_host_rdata  [get_bd_pins GPGPU_0/o_host_rdata] \
   [get_bd_pins axi_gpio_rdata/gpio_io_i]
-  connect_bd_net -net GPGPU_0_o_loading  [get_bd_pins GPGPU_0/o_loading] \
-  [get_bd_ports o_loading_0] \
+  connect_bd_net -net GPGPU_0_o_idle  [get_bd_pins GPGPU_0/o_idle] \
+  [get_bd_ports o_idle_0] \
   [get_bd_pins ilconcat_0/In0]
   connect_bd_net -net GPGPU_0_o_running  [get_bd_pins GPGPU_0/o_running] \
+  [get_bd_ports o_running_0] \
   [get_bd_pins ilconcat_0/In1]
   connect_bd_net -net axi_gpio_address_gpio_io_o  [get_bd_pins axi_gpio_address/gpio_io_o] \
   [get_bd_pins GPGPU_0/i_host_address]

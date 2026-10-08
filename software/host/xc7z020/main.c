@@ -253,7 +253,6 @@ static void print_help(void) {
     xil_printf("  loaddmem_bin <offset> <count>\r\n");
     xil_printf("  --------- CONTROL ---------\r\n");
     xil_printf("  run\r\n");
-    xil_printf("  done\r\n");
     xil_printf("\r\n");
 }
 
@@ -426,9 +425,6 @@ int main(void) {
 
         } else if (strcmp(cmd, "run") == 0) {
             gpgpu_start_and_wait();
-
-        } else if (strcmp(cmd, "done") == 0) {
-            gpgpu_finish_readback();
 
         } else {
             xil_printf("Unknown command: %s\r\n", cmd);

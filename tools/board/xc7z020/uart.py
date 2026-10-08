@@ -65,7 +65,7 @@ def parse_status(text: str) -> dict[str, int | str]:
     raw = re.search(r"STATUS\s*=\s*0x([0-9a-fA-F]+)", text)
     if raw:
         status["raw"] = int(raw.group(1), 16)
-    for name in ("loading", "running", "dumping", "busy", "done"):
+    for name in ("idle", "running", "busy", "done"):
         match = re.search(rf"\b{name}\s*=\s*([01])", text)
         if match:
             status[name] = int(match.group(1))
@@ -223,16 +223,9 @@ class GpgpuUartMonitor:
 
     def run(self) -> str:
         self.write_line("run")
-        output, marker = self.read_until(["Core entered dumping state", "ERROR"], timeout=30.0)
+        output, marker = self.read_until(["Core entered idle state", "ERROR"], timeout=30.0)
         if marker == "ERROR":
             raise RuntimeError(f"Run failed:\n{output}")
-        return output + self.wait_prompt(timeout=10.0)
-
-    def done(self) -> str:
-        self.write_line("done")
-        output, marker = self.read_until(["Returned to loading state", "ERROR"], timeout=20.0)
-        if marker == "ERROR":
-            raise RuntimeError(f"READ_DONE failed:\n{output}")
         return output + self.wait_prompt(timeout=10.0)
 
     # Single-word commands

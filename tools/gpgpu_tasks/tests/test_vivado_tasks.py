@@ -361,8 +361,8 @@ def test_block_design_matches_documented_board_configuration() -> None:
         encoding="utf-8"
     )
 
-    assert "CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {36}" in block_design
-    assert "CONFIG.PCW_CLK0_FREQ {36363636}" in block_design
+    assert "CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {38}" in block_design
+    assert "CONFIG.PCW_CLK0_FREQ {38095242}" in block_design
     assert "CONFIG.PCW_UIPARAM_DDR_PARTNO {MT41K256M16 RE-125}" in block_design
     assert "CONFIG.PCW_UIPARAM_DDR_BUS_WIDTH {16 Bit}" in block_design
     assert "CONFIG.PCW_EN_EMIO_UART0 {1}" in block_design
@@ -376,13 +376,13 @@ def test_block_design_matches_documented_board_configuration() -> None:
     assert "PACKAGE_PIN M17 [get_ports UART_0_0_rxd]" in constraints
     assert "PACKAGE_PIN L17 [get_ports UART_0_0_txd]" in constraints
     assert (
-        "{PACKAGE_PIN P20 IOSTANDARD LVCMOS33} [get_ports o_loading_0]" in constraints
+        "{PACKAGE_PIN P20 IOSTANDARD LVCMOS33} [get_ports o_idle_0]" in constraints
     )
     assert (
-        "{PACKAGE_PIN P21 IOSTANDARD LVCMOS33} [get_ports o_dumping_0]" in constraints
+        "{PACKAGE_PIN P21 IOSTANDARD LVCMOS33} [get_ports o_running_0]" in constraints
     )
-    assert "create_bd_port -dir O o_running_0" not in block_design
-    assert "get_ports o_running_0" not in constraints
+    assert "create_bd_port -dir O o_running_0" in block_design
+    assert "get_ports o_running_0" in constraints
 
 
 def test_committed_block_design_substitutes_configured_core_count() -> None:

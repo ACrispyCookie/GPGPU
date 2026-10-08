@@ -60,13 +60,16 @@ nonblocking per-port advisory lock and pyserial exclusive opening, but unrelated
 clients that do not cooperate with those locks can still interfere.
 
 Before opening UART, the uploaded image must contain 1–2048 nonempty words,
-each exactly eight hexadecimal digits. The driver rejects malformed, running
-or busy device status. A completed dumping state is acknowledged with `done`
-to return to loading. IMEM is loaded at word offset zero using `loadimem_bin`,
-then read back and compared. The run stage rechecks IMEM under its own UART
-lock before sending `run`, preventing a different CLI session's loaded program
-from being launched silently. After completion, `done` returns the core to
-loading; failures stop the dependency chain and retain normal CLI stage logs.
+each exactly eight hexadecimal digits. The driver requires an idle, non-running,
+non-busy device with a complete `idle/running/busy/done` status. Legacy
+`loading/dumping` host monitors are rejected before IMEM mutation; build and
+deploy matching PL and host ELF artifacts before using these tasks.
+IMEM is loaded at word offset zero using `loadimem_bin`, then read back and
+compared. The run stage rechecks IMEM under its own UART lock before sending
+`run`, preventing a different CLI session's loaded program from being launched
+silently. The host returns to idle automatically after completion; the driver
+checks status again and never sends the removed `done` command. Failures stop
+the dependency chain and retain normal CLI stage logs.
 
 **Scope:** one generic kernel launch, retaining existing DMEM. There is no
 program-specific adapter initialization, GPGPU_ARGS/data loading, DMEM export,

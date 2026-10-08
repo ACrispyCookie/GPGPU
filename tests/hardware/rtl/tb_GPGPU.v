@@ -10,9 +10,8 @@ module tb_GPGPU_smx_only ();
 
     reg clk_in, rst;
 
-    wire o_loading;
+    wire o_idle;
     wire o_running;
-    wire o_dumping;
 
     wire [31:0] host_rdata;
     wire host_busy;
@@ -48,9 +47,8 @@ module tb_GPGPU_smx_only ();
         .clk_in(clk_in),
         .rst(rst),
 
-        .o_loading(o_loading),
+        .o_idle(o_idle),
         .o_running(o_running),
-        .o_dumping(o_dumping),
 
         .i_host_command(host_command),
         .i_host_command_valid(host_command_valid),
@@ -193,7 +191,7 @@ module tb_GPGPU_smx_only ();
             end
 
             $fclose(fd_trace);
-            force UUT.core_state = `CORE_DUMPING;
+            force UUT.core_state = `CORE_IDLE;
 
             if (cycle_count >= `TEST_TIMEOUT_CYCLES) begin
                 $display("  [WARNING] Test %0d reached timeout of %0d cycles!",

@@ -18,6 +18,12 @@ set gpgpu_cell [get_bd_cells -quiet GPGPU_0]
 if {[llength $gpgpu_cell] != 1} {
     error "Refusing to export incomplete block design: missing GPGPU_0. The committed Tcl has not been changed."
 }
+# A pre-merge saved BD must not overwrite the current bootstrap template.
+foreach legacy_port {o_loading_0 o_dumping_0} {
+    if {[llength [get_bd_ports -quiet $legacy_port]] > 0} {
+        error "Refusing to export legacy status interface: $legacy_port still exists. Update the saved BD to idle/running or use a fresh build root. The committed Tcl has not been changed."
+    }
+}
 validate_bd_design
 file mkdir [file dirname $EXPORT_FILE]
 write_bd_tcl -force $EXPORT_FILE
