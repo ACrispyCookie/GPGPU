@@ -1,5 +1,5 @@
 
-`include "../constants.svh"
+`include "constants.svh"
 
 module GPGPURegs #(
     parameter int unsigned SP_PER_SM = 32

@@ -11,6 +11,7 @@ module GPGPUState (
     output logic [1:0] o_core_state,
     output logic o_stopped,
     output logic o_idle,
+    output logic o_clear,
     output logic o_running,
     output logic o_complete_pulse
 );
@@ -59,7 +60,9 @@ module GPGPUState (
 
     always_comb begin
         o_idle = 1'b0;
+        o_clear = 1'b0;
         o_running = 1'b0;
+        
         case (current_state)
             IDLE: begin
                 o_core_state = `CORE_IDLE;
@@ -67,6 +70,7 @@ module GPGPUState (
             end
             RESET: begin
                 o_core_state = `CORE_RESET;
+                o_clear = 1'b1;
             end
             RUNNING: begin
                 o_core_state = `CORE_RUNNING;

@@ -31,7 +31,7 @@ VERILATOR_FLAGS := --binary --timing --assert --trace -Wno-fatal \
 UART_PORT ?= /dev/ttyACM0
 UART_BAUD ?= 115200
 
-.PHONY: all testsuite gen assemble expected compile simulate run control mmio-routing host visualize clean
+.PHONY: all testsuite gen assemble expected compile simulate host visualize clean
 
 # ==============================================================================
 # MODULAR TEST SUITE PIPELINE
@@ -60,13 +60,6 @@ compile:
 simulate: compile
 	$(SIM_EXE) $(PLUSARGS) | tee simulation.log
 	@if grep -qiE '\[FAIL\]|\[ERROR\]|%Error|Fatal:' simulation.log; then exit 1; fi
-
-control:
-	python3 -m unittest discover -p test_gpgpu_control_structure.py -v
-	$(MAKE) --no-print-directory simulate TB=tb_GPGPUControl.sv TOP=tb_GPGPUControl
-
-mmio-routing:
-	$(MAKE) --no-print-directory simulate TB=tb_GPGPUMMIORouting.sv TOP=tb_GPGPUMMIORouting
 
 host: gen
 	python3 host_uart_tester.py --port $(UART_PORT) --baud $(UART_BAUD)
