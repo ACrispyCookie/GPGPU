@@ -56,7 +56,7 @@ module tb_GPGPU_e2e ();
     // DUT
     // ============================================================
 
-    GPGPUDevice #(
+    GPGPU #(
         .SP_PER_SM(NUM_CORES), .MEMORY_INIT("")
     ) UUT (
         .clk(clk_in), .rst_n(rst),

@@ -1,7 +1,7 @@
 
 `include "constants.svh"
 
-module GPGPURegs #(
+module CSRBank #(
     parameter int unsigned SP_PER_SM = 32
 ) (
     input  logic        clk,

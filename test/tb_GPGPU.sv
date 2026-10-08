@@ -31,7 +31,7 @@ module tb_GPGPU_smx_only ();
     reg [8*255:0] reg_file;
     reg [8*255:0] trace_file;
 
-    GPGPUDevice #(.SP_PER_SM(NUM_CORES), .MEMORY_INIT("")) UUT (
+    GPGPU #(.SP_PER_SM(NUM_CORES), .MEMORY_INIT("")) UUT (
         .clk(clk_in), .rst_n(rst),
         .i_req_valid(1'b0), .o_req_ready(), .i_req_write(1'b0),
         .i_req_addr(32'b0), .i_req_wdata(32'b0), .i_req_wstrb(4'b0),
@@ -137,7 +137,7 @@ module tb_GPGPU_smx_only ();
             repeat (10) @(posedge uut_clk);
 
             /*
-             * Bypass GPGPUState for SMX-only testing.
+             * Bypass ExecutionController for SMX-only testing.
              *
              * This forces the GPGPU top-level muxes to give memory ownership
              * to the SMX and makes o_running reflect running state.

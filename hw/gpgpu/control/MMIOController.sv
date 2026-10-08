@@ -1,6 +1,6 @@
 `include "constants.svh"
 
-module GPGPUMMIO (
+module MMIOController (
     input  logic        clk,
     input  logic        rst_n,
 
