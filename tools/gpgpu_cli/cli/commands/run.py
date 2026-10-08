@@ -99,6 +99,14 @@ The dependency chain is: Vivado XSA → editable Vitis project → platform buil
 
 [bold cyan]FPGA[/bold cyan]
 
+• `fpga:programs:<program>:upload` — Build RISC-V assembly and IMEM, then SCP only `<program>_instructions.mem` to the VM upload directory.
+
+• `fpga:programs:<program>:load-imem` — After upload, binary-load and verify IMEM through the VM UART monitor. Configure `hardware.fpga.uart.*`; no reset, mode change or board programming.
+
+• `fpga:programs:<program>:run` — After verified IMEM load, launch once and return to loading with done. DMEM is retained; no adapter initialization, CSV or visualization.
+
+• `fpga:programs:<program>:all` — RISC-V build → mem → upload → load-imem → run. Remote actions repeat on every invocation.
+
 • `fpga:upload` — Upload without building via SCP: existing Vivado bitstream, Vitis `ps7_init.tcl`, and host ELF to the board-connected VM. Configure `hardware.fpga.upload.destination` and `hardware.fpga.upload.directory`.
 
 • `fpga:reset` — SSH to the Debian VM and run its installed `fr` shell shortcut through interactive Bash, preserving the current mode.

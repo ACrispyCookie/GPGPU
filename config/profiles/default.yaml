@@ -7,6 +7,11 @@ hardware:
     agent:
       device: "210299730789"
       directory: /app
+    uart:
+      port: /dev/ttyUSB0
+      baud: 115200
+      sudo: true
+      python: python3
     upload:
       destination: njason@192.168.1.13
       directory: /home/njason/upload

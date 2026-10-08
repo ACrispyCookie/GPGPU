@@ -52,4 +52,21 @@ The source directory is not used for generated artifacts. To select an external 
 The build root must not overlap the repository root or any source/config/tool
 directory; unsafe values are rejected before task dispatch.
 
+## FPGA execution through the VM
+
+```bash
+./gpgpu run fpga:programs:<program>:upload
+./gpgpu run fpga:programs:<program>:load-imem
+./gpgpu run fpga:programs:<program>:run
+./gpgpu run fpga:programs:<program>:all
+```
+
+Each command includes its prerequisites: RISC-V build and IMEM generation →
+SCP upload → verified binary IMEM load through the VM's UART → one kernel launch.
+The compiler is incremental; remote actions repeat. The board must already be
+programmed with the compatible host monitor. These tasks retain DMEM and do not
+initialize program-specific arguments, export CSVs or visualize results.
+See [FPGA CLI flow](../../docs/fpga-cli.md) for VM serial configuration,
+permissions, UART ownership and failure handling. `run.sh` remains untouched.
+
 The legacy `Makefile` uses the same output layout and accepts `BUILD_ROOT` as an override, but the `gpgpu` task runner is the authoritative config-driven entry point.

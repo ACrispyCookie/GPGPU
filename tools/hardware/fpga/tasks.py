@@ -221,4 +221,69 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             }
             for mode in ("project", "demo")
         ],
+        *_program_tasks(config, paths),
     ]
+
+
+def run_program_uart(config: ResolvedConfig, program: str, operation: str) -> None:
+    """Stream the shared UART client and driver to Python in the SSH namespace."""
+    if operation not in ("load-imem", "run"):
+        raise ValueError("Unknown UART operation")
+    if not isinstance(program, str) or not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*", program):
+        raise ValueError("Unsafe program basename")
+    command = _validated_string(config, "tools.ssh.command", r"(?!-)[A-Za-z0-9_./-]+", "a single executable")
+    destination = _validated_string(config, "hardware.fpga.upload.destination", r"(?:[A-Za-z0-9_.][A-Za-z0-9_.-]*@)?[A-Za-z0-9_.][A-Za-z0-9_.-]*", "a safe SSH destination")
+    directory = _validated_path(config, "hardware.fpga.upload.directory")
+    port = _validated_path(config, "hardware.fpga.uart.port")
+    python = _validated_string(config, "hardware.fpga.uart.python", r"(?!-)[A-Za-z0-9_./-]+", "a single executable")
+    baud = config.get("hardware.fpga.uart.baud")
+    sudo = config.get("hardware.fpga.uart.sudo")
+    if type(baud) is not int or baud <= 0:
+        raise ValueError("hardware.fpga.uart.baud must be a positive integer")
+    if type(sudo) is not bool:
+        raise ValueError("hardware.fpga.uart.sudo must be boolean")
+    remote = (["sudo", "-n"] if sudo else []) + [python, "-"]
+    source_root = Path(__file__).resolve().parents[3]
+    client = (source_root / "tools/board/xc7z020/uart.py").read_text()
+    driver = Path(__file__).with_name("program_uart.py").read_text()
+    # Separate exec scopes preserve __future__ imports without rewriting the client.
+    imem = str(PurePosixPath(directory) / f"{program}_instructions.mem")
+    payload = f"exec({client!r}, globals())\nexec({driver!r}, globals())\nremote_main({operation!r}, {imem!r}, {port!r}, {baud!r})\n"
+    subprocess.run([command, "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "--", destination, shlex.join(remote)],
+                   cwd=config.repo_root, input=payload, text=True, check=True)
+
+
+def _program_tasks(config: ResolvedConfig, paths: ProjectPaths) -> list[dict[str, Any]]:
+    tasks = []
+    if not paths.software_programs.is_dir():
+        return tasks
+    import importlib.util
+
+    # Task modules are loaded by file path; the checkout is not necessarily an
+    # importable package (e.g. CLI invoked from another working directory).
+    source = Path(__file__).resolve().parents[2] / "software/programs.py"
+    spec = importlib.util.spec_from_file_location("fpga_software_programs", source)
+    assert spec is not None and spec.loader is not None
+    software = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(software)
+
+    for program in software._program_names(paths.software_programs):
+        prefix = f"fpga:programs:{program}"
+        filename = f"{program}_instructions.mem"
+        tasks.append({
+            "name": f"{prefix}:upload",
+            "task_dep": [f"software:programs:{program}:riscv:build", f"software:programs:{program}:mem"],
+            "uptodate": [False],
+            "actions": [(upload_artifacts, [
+                ((paths.program_builds / program / filename, filename),),
+                config.get("tools.scp.command"), config.get("hardware.fpga.upload.destination"),
+                config.get("hardware.fpga.upload.directory"), paths.repo_root,
+            ])],
+        })
+        for operation, dependency in (("load-imem", "upload"), ("run", "load-imem")):
+            tasks.append({
+                "name": f"{prefix}:{operation}", "task_dep": [f"{prefix}:{dependency}"],
+                "uptodate": [False], "actions": [(run_program_uart, [config, program, operation])],
+            })
+        tasks.append({"name": f"{prefix}:all", "task_dep": [f"{prefix}:run"], "actions": []})
+    return tasks

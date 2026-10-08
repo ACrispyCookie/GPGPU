@@ -3,6 +3,79 @@
 The `fpga:*` namespace contains board-operation tasks, separate from the Vivado
 and Vitis build stages.
 
+## Upload, load and execute a RISC-V program
+
+```bash
+./gpgpu run fpga:programs:simple:upload
+./gpgpu run fpga:programs:simple:load-imem
+./gpgpu run fpga:programs:simple:run
+./gpgpu run fpga:programs:simple:all
+```
+
+For every discovered `<program>/<program>.c`, the dependency chain is:
+
+```text
+RISC-V assembly build + instruction-memory generation
+  → fpga:programs:<program>:upload
+  → fpga:programs:<program>:load-imem
+  → fpga:programs:<program>:run
+  → fpga:programs:<program>:all (aggregate)
+```
+
+Each task includes its predecessors. Compiler outputs remain incremental;
+upload, IMEM load and execution repeat on every invocation. Upload copies only
+`<build-root>/software/programs/<program>/<program>_instructions.mem` to
+`hardware.fpga.upload.directory/<program>_instructions.mem` via SCP. It does
+not transfer or program the board bitstream/host ELF.
+
+Runtime uses the existing baremetal UART monitor **on the board-connected VM**.
+The CLI streams the repository's shared `tools/board/xc7z020/uart.py` and a small
+driver to VM Python over SSH stdin; it does not install files/packages remotely,
+use minicom interactively, or invent an Agent runtime API. IMEM filenames use
+the SSH upload namespace (`/home/njason/upload`), not the Agent namespace (`/app`).
+
+Default runtime configuration:
+
+```yaml
+hardware:
+  fpga:
+    uart:
+      port: /dev/ttyUSB0
+      baud: 115200
+      sudo: true
+      python: python3
+```
+
+Override these in `config/local.yaml` or with global `--set` options. For example,
+if the SSH user already has serial access:
+
+```bash
+./gpgpu --set hardware.fpga.uart.sudo=false run fpga:programs:simple:all
+```
+
+The VM interpreter must have `pyserial` installed. With `sudo: true`, commands
+use `sudo -n`; password prompts are never handled. Close minicom and coordinate
+UART ownership with the Agent or other serial clients first. The driver uses a
+nonblocking per-port advisory lock and pyserial exclusive opening, but unrelated
+clients that do not cooperate with those locks can still interfere.
+
+Before opening UART, the uploaded image must contain 1–2048 nonempty words,
+each exactly eight hexadecimal digits. The driver rejects malformed, running
+or busy device status. A completed dumping state is acknowledged with `done`
+to return to loading. IMEM is loaded at word offset zero using `loadimem_bin`,
+then read back and compared. The run stage rechecks IMEM under its own UART
+lock before sending `run`, preventing a different CLI session's loaded program
+from being launched silently. After completion, `done` returns the core to
+loading; failures stop the dependency chain and retain normal CLI stage logs.
+
+**Scope:** one generic kernel launch, retaining existing DMEM. There is no
+program-specific adapter initialization, GPGPU_ARGS/data loading, DMEM export,
+CSV generation or visualization. Programs such as nbody may require prepared
+DMEM/arguments to produce meaningful results. The board must already be in
+PROJECT mode with the compatible PL and host monitor running. These tasks do
+not reset the board, change mode, or depend on `fpga:program`/`fpga:deploy`.
+The legacy `software/programs/run.sh` is left untouched.
+
 ## Program only or upload and program
 
 ```bash
