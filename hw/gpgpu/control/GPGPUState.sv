@@ -9,7 +9,10 @@ module GPGPUState (
     input logic i_core_complete,
 
     output logic [1:0] o_core_state,
-    output logic o_stopped
+    output logic o_stopped,
+    output logic o_idle,
+    output logic o_running,
+    output logic o_complete_pulse
 );
     typedef enum logic [1:0] {
         IDLE = `CORE_IDLE,
@@ -55,21 +58,30 @@ module GPGPUState (
     end
 
     always_comb begin
+        o_idle = 1'b0;
+        o_running = 1'b0;
         case (current_state)
             IDLE: begin
                 o_core_state = `CORE_IDLE;
+                o_idle = 1'b1;
             end
             RESET: begin
                 o_core_state = `CORE_RESET;
             end
             RUNNING: begin
                 o_core_state = `CORE_RUNNING;
+                o_running = 1'b1;
             end
             default: begin
                 o_core_state = `CORE_IDLE;
+                o_idle = 1'b1;
             end
         endcase
     end
+
+    // Pre-edge normal-completion event: consumers latch it on the same edge
+    // that returns RUNNING to IDLE. STOP suppresses completion, preserving abort.
+    assign o_complete_pulse = o_running && i_core_complete && !i_stop;
 
     // STOPPED inhibits START until explicitly acknowledged or externally reset.
     always_ff @(posedge clk) begin

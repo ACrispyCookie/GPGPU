@@ -27,11 +27,18 @@ module GPGPUDevice #(
     wire [1:0] core_state;
     wire core_run, core_clear;
     wire core_complete, stopped;
+    wire core_idle, complete_pulse;
     wire control_start, control_stop, clear_stopped;
 
-    // Host memory signals
-    wire [31:0] host_address, host_wdata;
-    wire host_imem_ren, host_dmem_ren, host_imem_wen, host_dmem_wen;
+    // CSR access description/commit. Register actions go directly to State.
+    wire csr_write, csr_write_fire;
+    wire [31:0] csr_addr, csr_wdata, csr_rdata;
+    wire [3:0] csr_byte_en;
+    wire [2:0] csr_status;
+
+    // Host memory path bypasses the CSR bank.
+    MemoryInterface #(.ADDR_WIDTH(`IMEM_AW)) host_imem ();
+    MemoryInterface #(.ADDR_WIDTH(`DMEM_AW)) host_dmem ();
 
     // SMX memory signals
     wire [`DMEM_AW-1:0] core_dmem_addr_a, core_dmem_addr_b;
@@ -39,45 +46,56 @@ module GPGPUDevice #(
     wire [31:0] core_dmem_wdata_a, core_dmem_wdata_b;
     wire core_imem_ren, core_dmem_ren_a, core_dmem_ren_b, core_dmem_wen_a, core_dmem_wen_b;
 
-    assign core_run = core_state == `CORE_RUNNING;
     assign core_clear = core_state == `CORE_RESET;
 
-    assign dmem_if_a.addr = core_run ? core_dmem_addr_a : host_address[`DMEM_AW-1:0];
-    assign dmem_if_a.wdata = core_run ? core_dmem_wdata_a : host_wdata;
-    assign dmem_if_a.ren = core_run ? core_dmem_ren_a : host_dmem_ren;
-    assign dmem_if_a.wen = core_run ? core_dmem_wen_a : host_dmem_wen;
+    assign dmem_if_a.addr = core_run ? core_dmem_addr_a : host_dmem.addr;
+    assign dmem_if_a.wdata = core_run ? core_dmem_wdata_a : host_dmem.wdata;
+    assign dmem_if_a.ren = core_run ? core_dmem_ren_a : host_dmem.ren;
+    assign dmem_if_a.wen = core_run ? core_dmem_wen_a : host_dmem.wen;
+    assign host_dmem.rdata = dmem_if_a.rdata;
 
     assign dmem_if_b.addr = core_dmem_addr_b;
     assign dmem_if_b.wdata = core_dmem_wdata_b;
     assign dmem_if_b.ren = core_run ? core_dmem_ren_b : 1'b0;
     assign dmem_if_b.wen = core_run ? core_dmem_wen_b : 1'b0;
 
-    assign imem_if.addr = core_run ? core_imem_addr : host_address[`IMEM_AW-1:0];
-    assign imem_if.wdata = host_wdata;
-    assign imem_if.ren = core_run ? core_imem_ren : host_imem_ren;
-    assign imem_if.wen = core_run ? 1'b0 : host_imem_wen;
+    assign imem_if.addr = core_run ? core_imem_addr : host_imem.addr;
+    assign imem_if.wdata = host_imem.wdata;
+    assign imem_if.ren = core_run ? core_imem_ren : host_imem.ren;
+    assign imem_if.wen = core_run ? 1'b0 : host_imem.wen;
+    assign host_imem.rdata = imem_if.rdata;
 
-    GPGPUController #(.SP_PER_SM(SP_PER_SM)) controller (
+    GPGPUMMIO mmio (
         .clk(clk), .rst_n(rst_n),
         .i_req_valid(i_req_valid), .o_req_ready(o_req_ready),
         .i_req_write(i_req_write), .i_req_addr(i_req_addr),
         .i_req_wdata(i_req_wdata), .i_req_wstrb(i_req_wstrb),
         .o_rsp_valid(o_rsp_valid), .i_rsp_ready(i_rsp_ready),
         .o_rsp_rdata(o_rsp_rdata), .o_rsp_status(o_rsp_status),
-        .i_core_state(core_state), .i_stopped(stopped), .i_core_complete(core_complete),
-        .o_start(control_start), .o_stop(control_stop), .o_clear_stopped(clear_stopped),
-        .o_irq(o_irq),
-        .o_host_address(host_address), .o_host_wdata(host_wdata),
-        .o_host_imem_ren(host_imem_ren), .o_host_imem_wen(host_imem_wen),
-        .o_host_dmem_ren(host_dmem_ren), .o_host_dmem_wen(host_dmem_wen),
-        .i_imem_rdata(imem_if.rdata), .i_dmem_rdata(dmem_if_a.rdata)
+        .i_idle(core_idle), .imem(host_imem), .dmem(host_dmem),
+        .o_csr_write(csr_write), .o_csr_addr(csr_addr),
+        .o_csr_wdata(csr_wdata), .o_csr_byte_en(csr_byte_en),
+        .o_csr_write_fire(csr_write_fire),
+        .i_csr_rdata(csr_rdata), .i_csr_status(csr_status)
+    );
+
+    GPGPURegs #(.SP_PER_SM(SP_PER_SM)) regs (
+        .clk(clk), .rst_n(rst_n),
+        .i_write(csr_write), .i_addr(csr_addr), .i_wdata(csr_wdata),
+        .i_byte_en(csr_byte_en), .i_write_fire(csr_write_fire),
+        .o_rdata(csr_rdata), .o_status(csr_status),
+        .i_idle(core_idle), .i_running(core_run), .i_stopped(stopped),
+        .i_complete_pulse(complete_pulse),
+        .o_start(control_start), .o_stop(control_stop),
+        .o_clear_stopped(clear_stopped), .o_irq(o_irq)
     );
 
     GPGPUState state (
         .clk(clk), .rst_n(rst_n),
         .i_start(control_start), .i_stop(control_stop),
         .i_clear_stopped(clear_stopped), .i_core_complete(core_complete),
-        .o_core_state(core_state), .o_stopped(stopped)
+        .o_core_state(core_state), .o_stopped(stopped),
+        .o_idle(core_idle), .o_running(core_run), .o_complete_pulse(complete_pulse)
     );
 
     StreamingMultiprocessor #(
