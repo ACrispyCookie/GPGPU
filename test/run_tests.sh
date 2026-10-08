@@ -1,5 +1,10 @@
 #!/bin/bash
 
+# Resolve repository fixtures/tools independently of the caller's directory.
+CALLER_DIR="$PWD"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+cd "$SCRIPT_DIR" || exit 1
+
 ITERS=100
 MODE="standard"
 VISUALIZE=false
@@ -18,7 +23,7 @@ print_help() {
     echo "Usage: ./run_tests.sh [OPTIONS]"
     echo ""
     echo "Modes:"
-    echo "  -s,  --standard          Run Verilog simulation testsuite"
+    echo "  -s,  --standard          Compile/run SystemVerilog tests with Verilator"
     echo "  -r,  --rand              Run simulation testsuite, then random fuzzer"
     echo "       --host              Run tests on real board through UART"
     echo "       --gen-only          Only run assembler and expected generator"
@@ -132,6 +137,9 @@ while [[ "$#" -gt 0 ]]; do
 
         --tb-file)
             TB_FILE="$2"
+            if [[ "$TB_FILE" != /* && -f "$CALLER_DIR/$TB_FILE" ]]; then
+                TB_FILE="$CALLER_DIR/$TB_FILE"
+            fi
             shift
             ;;
 
@@ -153,6 +161,11 @@ while [[ "$#" -gt 0 ]]; do
     esac
     shift
 done
+
+SIM_PLUSARGS="${PLUSARGS:-}"
+if [[ "$VISUALIZE" == true ]]; then
+    SIM_PLUSARGS="${SIM_PLUSARGS:+$SIM_PLUSARGS }+DUMP"
+fi
 
 if [[ "$MODE" != "host" && "$MODE" != "gen-only" ]]; then
     if [ ! -f "$TB_FILE" ]; then
@@ -205,7 +218,7 @@ case "$MODE" in
     standard|rand)
         TESTSUITE_FAILED=false
 
-        echo -e "\n[Step 1/2] Running Verilog testsuite with $TB_FILE..."
+        echo -e "\n[Step 1/2] Running Verilator testsuite with $TB_FILE..."
 
         if [[ -n "$RANGE_START" ]]; then
             for ((test_num = RANGE_START; test_num <= RANGE_END; test_num++)); do
@@ -221,11 +234,11 @@ case "$MODE" in
 
             if [ "$TESTSUITE_FAILED" = false ]; then
                 if ! make simulate TB="$TB_FILE" EXTRA_FLAGS="-DSIM" \
-                    PLUSARGS="+TEST_IDX=$RANGE_START +TEST_END=$RANGE_END"; then
+                    PLUSARGS="+TEST_IDX=$RANGE_START +TEST_END=$RANGE_END $SIM_PLUSARGS"; then
                     TESTSUITE_FAILED=true
                 fi
             fi
-        elif ! make testsuite TB="$TB_FILE" EXTRA_FLAGS="-DSIM"; then
+        elif ! make testsuite TB="$TB_FILE" EXTRA_FLAGS="-DSIM" PLUSARGS="$SIM_PLUSARGS"; then
             echo -e "\n[WARNING] Standard testsuite failed!"
             TESTSUITE_FAILED=true
         fi
@@ -234,7 +247,7 @@ case "$MODE" in
             echo -e "\n[Optional] Opening GTKWave..."
 
             if [ -f "./dumpfile.vcd" ]; then
-                (gtkwave ./dumpfile.vcd ./waveform.gtkw > /dev/shm/gtkwave.log 2>&1 &)
+                (gtkwave ./dumpfile.vcd ./waveform.gtkw > ./gtkwave.log 2>&1 &)
                 echo "  -> GTKWave launched in background."
             else
                 echo "  -> [Error] dumpfile.vcd not found. Cannot open GTKWave."

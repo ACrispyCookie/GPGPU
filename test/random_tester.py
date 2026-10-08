@@ -1,6 +1,7 @@
 import os
 import random
 import subprocess
+import sys
 import shutil
 import argparse # NEW: For command line arguments
 
@@ -161,23 +162,32 @@ def main():
         generate_random_assembly(asm_filepath)
         
         # 2. Build ONLY the random test folder to save massive amounts of time
-        subprocess.run(["python3", "assembler.py", RANDOM_TEST_DIR], capture_output=True)
-        subprocess.run(["python3", "expected_generator.py", RANDOM_TEST_DIR], capture_output=True)
+        for tool in ("assembler.py", "expected_generator.py"):
+            generated = subprocess.run([sys.executable, tool, RANDOM_TEST_DIR],
+                                       capture_output=True, text=True)
+            if generated.returncode != 0:
+                print(generated.stdout + generated.stderr)
+                return 1
         
-        # 3. Run the Verilog simulation only
-        subprocess.run(["make", "compile"], capture_output=True)
-        result = subprocess.run(["vvp", "./main", f"+TEST_IDX=999"], capture_output=True, text=True)
+        # 3. Build/run the same Verilator pipeline as the standard tests.
+        result = subprocess.run(
+            ["make", "simulate", "TB=tb_GPGPU.sv", "EXTRA_FLAGS=-DSIM",
+             "PLUSARGS=+TEST_IDX=999 +TEST_END=999"],
+            capture_output=True, text=True,
+        )
         
         # 4. Check results
-        if "[WARNING]" in result.stdout or "[ERROR]" in result.stdout or "[SUCCESS]" not in result.stdout:
+        if result.returncode != 0 or "[WARNING]" in result.stdout or "[ERROR]" in result.stdout or "[SUCCESS]" not in result.stdout:
             print(f"\n[!!!] ITERATION {i} FAILED! [!!!]")
             print("==================================================================")
             # Print the last 30 lines of the simulation output to show the exact mismatch
             print("\n".join(result.stdout.splitlines()[-30:]))
+            if result.stderr:
+                print(result.stderr)
             print("==================================================================")
             print(f"Simulation stopped. The failing test has been preserved in '{RANDOM_TEST_DIR}/'")
             print("Check 'program.asm' and the generated memories to debug.")
-            break
+            return 1
         else:
             print(f"    [PASS] Iteration {i} successful.")
             # 5. Cleanup to prevent clogging
@@ -187,6 +197,7 @@ def main():
         print("\n==================================================================")
         print(f"SUCCESS! All {args.iterations} random tests passed flawlessly.")
         print("==================================================================")
+    return 0
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
