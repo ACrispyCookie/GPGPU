@@ -1,6 +1,6 @@
 `include "constants.svh"
 
-module GPGPUControlPlane #(
+module GPGPUController #(
     parameter SP_PER_SM = 32
 ) (
     input wire clk,
@@ -12,6 +12,7 @@ module GPGPUControlPlane #(
     input wire [31:0] i_req_addr,
     input wire [31:0] i_req_wdata,
     input wire [3:0] i_req_wstrb,
+
     output reg o_rsp_valid,
     input wire i_rsp_ready,
     output reg [31:0] o_rsp_rdata,

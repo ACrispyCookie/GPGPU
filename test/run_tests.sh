@@ -220,9 +220,8 @@ case "$MODE" in
             done
 
             if [ "$TESTSUITE_FAILED" = false ]; then
-                make compile TB="$TB_FILE" EXTRA_FLAGS="-DSIM" && \
-                    vvp ./main +TEST_IDX="$RANGE_START" +TEST_END="$RANGE_END" | tee simulation.log
-                if [[ ${PIPESTATUS[0]} -ne 0 ]] || grep -qE "\[FAIL\]|\[Error\]" simulation.log; then
+                if ! make simulate TB="$TB_FILE" EXTRA_FLAGS="-DSIM" \
+                    PLUSARGS="+TEST_IDX=$RANGE_START +TEST_END=$RANGE_END"; then
                     TESTSUITE_FAILED=true
                 fi
             fi

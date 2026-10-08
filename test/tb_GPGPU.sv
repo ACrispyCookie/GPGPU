@@ -137,13 +137,13 @@ module tb_GPGPU_smx_only ();
             repeat (10) @(posedge uut_clk);
 
             /*
-             * Bypass GPGPUController for SMX-only testing.
+             * Bypass GPGPUState for SMX-only testing.
              *
              * This forces the GPGPU top-level muxes to give memory ownership
              * to the SMX and makes o_running reflect running state.
              */
             @(negedge UUT.clk);
-            force UUT.controller.current_state = `CORE_RUNNING;
+            force UUT.state.current_state = UUT.state.RUNNING;
 
             cycle_count = 0;
 
@@ -164,7 +164,9 @@ module tb_GPGPU_smx_only ();
             end
 
             $fclose(fd_trace);
-            force UUT.controller.current_state = `CORE_IDLE;
+            // Do not change the forced run state in the active writeback edge.
+            @(negedge uut_clk);
+            force UUT.state.current_state = UUT.state.IDLE;
 
             if (cycle_count >= `TEST_TIMEOUT_CYCLES) begin
                 $fatal(1, "Test %0d reached timeout of %0d cycles!",

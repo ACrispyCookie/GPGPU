@@ -1,56 +1,69 @@
-/*
-    True dual port memory to be implemented in vivado's BRAM. A write on the same
-    memory address on the same cycle will result in an undefined behaviour.
-*/
+/**
+ * True dual-port memory targeting Vivado BRAM.
+ *
+ * Simultaneous writes to the same address have undefined behavior.
+ * Both ports use write-first behavior.
+ */
 module MemoryDualPort #(
-    parameter DEPTH = 1024,
+    parameter int DEPTH = 1024,
     parameter INIT_FILE = "empty.mem"
 )(
-    input clk,
+    input logic clk,
 
-    //! Port A
-    input [$clog2(DEPTH)-1:0] i_addr_a, // Read or write address
-    input i_ren_a,                      // Read enable
-    input i_wen_a,                      // Write enable
-    input [31:0] i_data_a,              // Write data
-    output reg [31:0] o_out_a,          // Read data
-
-    //! Port B
-    input [$clog2(DEPTH)-1:0] i_addr_b,
-    input i_ren_b,
-    input i_wen_b,
-    input [31:0] i_data_b,
-    output reg [31:0] o_out_b
+    MemoryInterface.slave memory_a,
+    MemoryInterface.slave memory_b
 );
 
-    (* ram_style = "block" *) reg [31:0] data [0:DEPTH-1];
+    (* ram_style = "block" *) 
+    logic [memory_a.DATA_WIDTH-1:0] data [0:DEPTH-1];
+
+    localparam int EXPECTED_ADDR_WIDTH = (DEPTH > 1) ? $clog2(DEPTH) : 1;
+    initial begin
+        assert (DEPTH > 0)
+            else $fatal(1, "Memory DEPTH must be positive");
+
+        assert ($bits(memory_a.addr) == EXPECTED_ADDR_WIDTH)
+            else $fatal(1,
+                "Port A address width mismatch: expected %0d, got %0d",
+                EXPECTED_ADDR_WIDTH, $bits(memory_a.addr));
+
+        assert ($bits(memory_b.addr) == EXPECTED_ADDR_WIDTH)
+            else $fatal(1,
+                "Port B address width mismatch: expected %0d, got %0d",
+                EXPECTED_ADDR_WIDTH, $bits(memory_b.addr));
+
+        assert (memory_a.DATA_WIDTH == memory_b.DATA_WIDTH)
+            else $fatal(1,
+                "Port data width mismatch: Port A = %0d, Port B = %0d",
+                memory_a.DATA_WIDTH, memory_b.DATA_WIDTH);
+    end
 
     initial begin
         if (INIT_FILE != "") begin
             $readmemh(INIT_FILE, data);
         end
     end
-
+ 
     // Port A
     always @(posedge clk) begin
-        if (i_ren_a) begin
-            if (i_wen_a) begin
-                data[i_addr_a] <= i_data_a;
-                o_out_a <= i_data_a;
+        if (memory_a.ren) begin
+            if (memory_a.wen) begin
+                data[memory_a.addr] <= memory_a.wdata;
+                memory_a.rdata <= memory_a.wdata;
             end else begin
-                o_out_a <= data[i_addr_a];
+                memory_a.rdata <= data[memory_a.addr];
             end
         end
     end
 
     // Port B
     always @(posedge clk) begin
-        if (i_ren_b) begin
-            if (i_wen_b) begin
-                data[i_addr_b] <= i_data_b;
-                o_out_b <= i_data_b;
+        if (memory_b.ren) begin
+            if (memory_b.wen) begin
+                data[memory_b.addr] <= memory_b.wdata;
+                memory_b.rdata <= memory_b.wdata;
             end else begin
-                o_out_b <= data[i_addr_b];
+                memory_b.rdata <= data[memory_b.addr];
             end
         end
     end

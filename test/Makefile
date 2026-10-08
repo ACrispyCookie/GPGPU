@@ -17,6 +17,7 @@ SRC_DIR := ../hw/gpgpu
 VERILOG_SOURCES := \
 	$(SRC_DIR)/*.svh \
 	$(SRC_DIR)/*.sv \
+	$(SRC_DIR)/control/*.sv \
 	$(SRC_DIR)/memory/*.sv \
 	$(SRC_DIR)/sp/*.sv
 

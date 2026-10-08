@@ -3,14 +3,23 @@ module MemorySinglePort #(
     parameter INIT_FILE = "empty.mem"
 )(
     input clk,
-    input [$clog2(DEPTH)-1:0] i_addr_a, // Read or write address
-    input i_ren_a,                      // Read enable
-    input i_wen_a,                      // Write enable
-    input [31:0] i_data_a,              // Write data
-    output reg [31:0] o_out_a           // Read data
+
+    MemoryInterface.slave memory
 );
 
-    (* ram_style = "block" *) reg [31:0] data [0:DEPTH-1];
+    (* ram_style = "block" *) 
+    logic [memory.DATA_WIDTH-1:0] data [0:DEPTH-1];
+
+    localparam int EXPECTED_ADDR_WIDTH = (DEPTH > 1) ? $clog2(DEPTH) : 1;
+    initial begin
+        assert (DEPTH > 0)
+            else $fatal(1, "Memory DEPTH must be positive");
+
+        assert ($bits(memory.addr) == EXPECTED_ADDR_WIDTH)
+            else $fatal(1,
+                "Memory address width mismatch: expected %0d, got %0d",
+                EXPECTED_ADDR_WIDTH, $bits(memory.addr));
+    end
 
     initial begin
         if (INIT_FILE != "") begin
@@ -20,13 +29,14 @@ module MemorySinglePort #(
 
     //! Port A
     always @(posedge clk) begin
-        if (i_ren_a) begin
-            if (i_wen_a) begin
-                data[i_addr_a] <= i_data_a;
-                o_out_a <= i_data_a;
+        if (memory.ren) begin
+            if (memory.wen) begin
+                data[memory.addr] <= memory.wdata;
+                memory.rdata <= memory.wdata;
             end else begin
-                o_out_a <= data[i_addr_a];
+                memory.rdata <= data[memory.addr];
             end
         end
     end
+
 endmodule

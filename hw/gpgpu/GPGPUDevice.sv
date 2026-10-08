@@ -39,31 +39,25 @@ module GPGPUDevice #(
     wire [31:0] core_dmem_wdata_a, core_dmem_wdata_b;
     wire core_imem_ren, core_dmem_ren_a, core_dmem_ren_b, core_dmem_wen_a, core_dmem_wen_b;
 
-    // MUX-ed memory signals
-    wire [`DMEM_AW-1:0] dmem_addr_a, dmem_addr_b;
-    wire [`IMEM_AW-1:0] imem_addr;
-    wire [31:0] imem_rdata, imem_wdata, dmem_rdata_a, dmem_wdata_a, dmem_rdata_b, dmem_wdata_b;
-    wire imem_ren, imem_wen, dmem_ren_a, dmem_wen_a, dmem_ren_b, dmem_wen_b;
-
     assign core_run = core_state == `CORE_RUNNING;
     assign core_clear = core_state == `CORE_RESET;
 
-    assign dmem_addr_a = core_run ? core_dmem_addr_a : host_address[`DMEM_AW-1:0];
-    assign dmem_wdata_a = core_run ? core_dmem_wdata_a : host_wdata;
-    assign dmem_ren_a = core_run ? core_dmem_ren_a : host_dmem_ren;
-    assign dmem_wen_a = core_run ? core_dmem_wen_a : host_dmem_wen;
+    assign dmem_if_a.addr = core_run ? core_dmem_addr_a : host_address[`DMEM_AW-1:0];
+    assign dmem_if_a.wdata = core_run ? core_dmem_wdata_a : host_wdata;
+    assign dmem_if_a.ren = core_run ? core_dmem_ren_a : host_dmem_ren;
+    assign dmem_if_a.wen = core_run ? core_dmem_wen_a : host_dmem_wen;
 
-    assign dmem_addr_b = core_dmem_addr_b;
-    assign dmem_wdata_b = core_dmem_wdata_b;
-    assign dmem_ren_b = core_run ? core_dmem_ren_b : 1'b0;
-    assign dmem_wen_b = core_run ? core_dmem_wen_b : 1'b0;
+    assign dmem_if_b.addr = core_dmem_addr_b;
+    assign dmem_if_b.wdata = core_dmem_wdata_b;
+    assign dmem_if_b.ren = core_run ? core_dmem_ren_b : 1'b0;
+    assign dmem_if_b.wen = core_run ? core_dmem_wen_b : 1'b0;
 
-    assign imem_addr = core_run ? core_imem_addr : host_address[`IMEM_AW-1:0];
-    assign imem_wdata = host_wdata;
-    assign imem_ren = core_run ? core_imem_ren : host_imem_ren;
-    assign imem_wen = core_run ? 1'b0 : host_imem_wen;
+    assign imem_if.addr = core_run ? core_imem_addr : host_address[`IMEM_AW-1:0];
+    assign imem_if.wdata = host_wdata;
+    assign imem_if.ren = core_run ? core_imem_ren : host_imem_ren;
+    assign imem_if.wen = core_run ? 1'b0 : host_imem_wen;
 
-    GPGPUControlPlane #(.SP_PER_SM(SP_PER_SM)) control_plane (
+    GPGPUController #(.SP_PER_SM(SP_PER_SM)) controller (
         .clk(clk), .rst_n(rst_n),
         .i_req_valid(i_req_valid), .o_req_ready(o_req_ready),
         .i_req_write(i_req_write), .i_req_addr(i_req_addr),
@@ -76,10 +70,10 @@ module GPGPUDevice #(
         .o_host_address(host_address), .o_host_wdata(host_wdata),
         .o_host_imem_ren(host_imem_ren), .o_host_imem_wen(host_imem_wen),
         .o_host_dmem_ren(host_dmem_ren), .o_host_dmem_wen(host_dmem_wen),
-        .i_imem_rdata(imem_rdata), .i_dmem_rdata(dmem_rdata_a)
+        .i_imem_rdata(imem_if.rdata), .i_dmem_rdata(dmem_if_a.rdata)
     );
 
-    GPGPUController controller (
+    GPGPUState state (
         .clk(clk), .rst_n(rst_n),
         .i_start(control_start), .i_stop(control_stop),
         .i_clear_stopped(clear_stopped), .i_core_complete(core_complete),
@@ -92,17 +86,17 @@ module GPGPUDevice #(
         .clk(clk),
         .rst(rst_n && !core_clear),
         .i_enable(core_run),
-        .i_ifid_instruction(imem_rdata),
+        .i_ifid_instruction(imem_if.rdata),
         .o_imem_addr(core_imem_addr),
         .o_imem_ren(core_imem_ren),
 
-        .i_dmem_rdata_a(dmem_rdata_a),
+        .i_dmem_rdata_a(dmem_if_a.rdata),
         .o_dmem_addr_a(core_dmem_addr_a),
         .o_dmem_ren_a(core_dmem_ren_a),
         .o_dmem_wen_a(core_dmem_wen_a),
         .o_dmem_wdata_a(core_dmem_wdata_a),
 
-        .i_dmem_rdata_b(dmem_rdata_b),
+        .i_dmem_rdata_b(dmem_if_b.rdata),
         .o_dmem_addr_b(core_dmem_addr_b),
         .o_dmem_ren_b(core_dmem_ren_b),
         .o_dmem_wen_b(core_dmem_wen_b),
@@ -111,18 +105,26 @@ module GPGPUDevice #(
         .o_kernel_complete(core_complete)
     );
 
+    MemoryInterface #(
+        .ADDR_WIDTH($clog2(`IMEM_ENTRIES))
+    ) imem_if ();
+
     (* dont_touch = `DEBUG *)
     MemorySinglePort #(
         .DEPTH(`IMEM_ENTRIES),
         .INIT_FILE(MEMORY_INIT)
     ) instructionMemory (
         .clk(clk),
-        .i_addr_a(imem_addr),
-        .i_ren_a(imem_ren),
-        .i_wen_a(imem_wen),
-        .i_data_a(imem_wdata),
-        .o_out_a(imem_rdata)
+        .memory(imem_if.slave)
     );
+
+    MemoryInterface #(
+        .ADDR_WIDTH($clog2(`DMEM_ENTRIES))
+    ) dmem_if_a ();
+
+    MemoryInterface #(
+        .ADDR_WIDTH($clog2(`DMEM_ENTRIES))
+    ) dmem_if_b ();
 
     (* dont_touch = `DEBUG *)
     MemoryDualPort #(
@@ -130,16 +132,8 @@ module GPGPUDevice #(
         .INIT_FILE(MEMORY_INIT)
     ) dataMemory (
         .clk(clk),
-        .i_addr_a(dmem_addr_a),
-        .i_ren_a(dmem_ren_a),
-        .i_wen_a(dmem_wen_a),
-        .i_data_a(dmem_wdata_a),
-        .o_out_a(dmem_rdata_a),
-        .i_addr_b(dmem_addr_b),
-        .i_ren_b(dmem_ren_b),
-        .i_wen_b(dmem_wen_b),
-        .i_data_b(dmem_wdata_b),
-        .o_out_b(dmem_rdata_b)
+        .memory_a(dmem_if_a.slave),
+        .memory_b(dmem_if_b.slave)
     );
 
 endmodule
