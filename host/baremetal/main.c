@@ -261,7 +261,11 @@ int main(void) {
     char line[128];
     xil_printf("\r\nGPGPU UART Host Monitor\r\n");
 
-    gpgpu_init();
+    if (gpgpu_init() != 0) {
+        xil_printf("ERROR: GPGPU initialization failed\r\n");
+        return 1;
+    }
+
     gpgpu_print_status();
     print_help();
 
