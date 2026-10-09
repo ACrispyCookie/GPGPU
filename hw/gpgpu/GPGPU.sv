@@ -23,6 +23,8 @@ module GPGPU #(
 
     output wire o_irq
 );
+    // tdb was here...
+
     // Control for the core
     wire [1:0] core_state;
     wire core_complete, complete_pulse, stopped;
