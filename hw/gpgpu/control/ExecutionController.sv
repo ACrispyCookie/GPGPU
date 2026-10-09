@@ -74,7 +74,7 @@ module ExecutionController (
 
     // Pre-edge normal-completion event: consumers latch it on the same edge
     // that returns RUNNING to IDLE. STOP suppresses completion, preserving abort.
-    assign o_complete_pulse = (o_core_state = `CORE_RUNNING) && i_core_complete && !i_stop;
+    assign o_complete_pulse = (o_core_state == `CORE_RUNNING) && i_core_complete && !i_stop;
 
     // STOPPED inhibits START until explicitly acknowledged or externally reset.
     always_ff @(posedge clk) begin
