@@ -57,12 +57,8 @@ module tb_GPGPU_e2e ();
     // ============================================================
 
     GPGPU #(
-<<<<<<<< HEAD:tests/hardware/rtl/tb_GPGPU_e2e.sv
-        .SP_PER_SM(NUM_CORES), .MEMORY_INIT("")
-========
-        .SP_PER_SM(NUM_CORES),
-        .MEMORY_INIT("../../hardware/rtl/memory/empty.mem")
->>>>>>>> main:tests/hardware/rtl/tb_GPGPU_e2e.v
+        .SP_PER_SM(NUM_CORES), 
+        .MEMORY_INIT("")
     ) UUT (
         .clk(clk_in), .rst_n(rst),
         .i_req_valid(req_valid), .o_req_ready(req_ready),
