@@ -1,0 +1,16 @@
+# Machine-local values override the selected profile.
+# The ./gpgpu launcher creates config/local.yaml automatically on first use.
+#
+# Example:
+# hardware:
+#   serial:
+#     port: /dev/ttyUSB1
+# paths:
+#   build:
+#     root: /mnt/fast/gpgpu-build
+# tools:
+#   vivado:
+#     command: /opt/Xilinx/Vivado/2025.2/bin/vivado
+#   vitis:
+#     command: /opt/Xilinx/2026.1/Vitis/bin/vitis
+{}

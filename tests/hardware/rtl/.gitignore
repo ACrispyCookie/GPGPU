@@ -1,0 +1,17 @@
+# Icarus/RTL simulation outputs
+main
+*.vcd
+*.gtkw
+*.log
+*.jou
+
+# Generated memories for committed regression case directories
+*.mem
+
+# Generated random/fuzzer cases
+cases/test999/
+/test999/
+
+# Local test environment
+venv/
+__pycache__/

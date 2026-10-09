@@ -1,6 +1,0 @@
-main
-venv
-*.vcd
-*.gtkw
-*.mem
-/test999/*.asm
