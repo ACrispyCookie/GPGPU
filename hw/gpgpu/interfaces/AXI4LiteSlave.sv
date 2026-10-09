@@ -89,8 +89,10 @@ module gpgpu_axi_slave_lite_v1_0_S00_AXI #(
 
     assign o_req_valid = S_AXI_ARESETN && (state == GPU_REQUEST);
     assign o_req_write = write_request;
-    assign o_req_addr  = {{(32-C_S_AXI_ADDR_WIDTH){1'b0}},
-                          (write_request ? awaddr_reg : araddr_reg)};
+    assign o_req_addr = {
+        16'b0,
+        write_request ? awaddr_reg[15:0] : araddr_reg[15:0]
+    };
     assign o_req_wdata = wdata_reg;
     assign o_req_wstrb = write_request ? wstrb_reg : 4'b0000;
 
