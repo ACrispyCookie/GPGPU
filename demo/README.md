@@ -1,6 +1,6 @@
 # Interactive nbody FPGA demo
 
-This folder contains the browser-controlled nbody demos so the normal `programs/run.sh` workflow stays focused on building/running programs. It supports the original 2D `nbody` program and the newer `nbody-3d` program.
+This folder contains the browser-controlled nbody demos so the normal `software/programs/run.sh` workflow stays focused on building/running programs. It supports the original 2D `nbody` program and the newer `nbody-3d` program.
 
 ## Run
 
@@ -43,7 +43,7 @@ Correctness note: this cache only skips values previously written by the host. I
 
 ## What it would take to make nbody 3D
 
-### Program/kernel (`programs/nbody/nbody.c`)
+### Program/kernel (`software/programs/nbody/nbody.c`)
 
 A real 3D simulation is a medium-sized program change, not just a display change.
 
@@ -66,7 +66,7 @@ Cost/risk:
 
 Estimated implementation size: roughly 40-80 lines changed in `nbody.c` if we keep the same branchless integer model.
 
-### Loader/adapter (`programs/nbody/fpga.py` and demo backend)
+### Loader/adapter (`software/programs/nbody/fpga.py` and demo backend)
 
 This is a small-to-medium ABI change.
 

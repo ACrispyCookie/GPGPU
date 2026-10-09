@@ -1,0 +1,100 @@
+architecture:
+  num_cores: 24
+
+hardware:
+  fpga:
+    part: xc7z020clg484-1
+    agent:
+      device: "210299730789"
+      directory: /app
+    uart:
+      port: /dev/ttyUSB0
+      baud: 115200
+      sudo: true
+      python: python3
+    upload:
+      destination: njason@192.168.1.13
+      directory: /home/njason/upload
+  serial:
+    port: /dev/ttyACM0
+    baud: 115200
+  vivado:
+    project_name: GPU
+    bd_name: gpgpu_block_design
+    top: gpgpu_block_design_wrapper
+    xsa_name: gpgpu_platform
+    version: "2026.1"
+    jobs: 6
+    host_interface:
+      address_gpio: "0x41200000"
+      cmd_gpio: "0x41210000"
+      rdata_gpio: "0x41220000"
+      status_gpio: "0x41230000"
+      wdata_gpio: "0x41240000"
+  vitis:
+    version: "2026.1"
+    platform_name: gpgpu_platform
+    host_name: gpgpu_host
+    cpu: ps7_cortexa9_0
+    domain: standalone_ps7_cortexa9_0
+    os: standalone
+    template: empty_application
+    default_archive: tools/hardware/vitis/default-project.zip
+    host_sources:
+      - software/host/xc7z020/gpgpu_host.c
+      - software/host/xc7z020/main.c
+
+software:
+  riscv:
+    march: rv32im
+    abi: ilp32
+
+tests:
+  rtl:
+    random:
+      iterations: 100
+      # Set a non-zero integer for reproducibility; 0 chooses and prints a seed.
+      seed: 0
+
+paths:
+  build:
+    root: build
+
+# Commands are names or paths. Machine-specific paths belong in config/local.yaml.
+tools:
+  git:
+    command: git
+    required: true
+  python:
+    command: python3
+    required: true
+  make:
+    command: make
+    required: true
+  native_cc:
+    command: gcc
+    required: true
+  riscv_gcc:
+    command: riscv64-unknown-elf-gcc
+    required: true
+  iverilog:
+    command: iverilog
+    required: true
+  vvp:
+    command: vvp
+    required: true
+  vivado:
+    command: vivado
+    required: false
+  vitis:
+    command: vitis
+    required: false
+  ssh:
+    command: ssh
+    required: false
+  scp:
+    command: scp
+    required: false
+  gtkwave:
+    command: gtkwave
+    required: false

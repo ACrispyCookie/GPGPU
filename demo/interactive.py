@@ -3,7 +3,7 @@
 
 This is intentionally independent of the future nbody FPGA adapter.  It gives
 us the browser/controls path now with a deterministic software backend; once
-programs/nbody/fpga.py exists, an FPGA backend can be wired in without
+software/programs/nbody/fpga.py exists, an FPGA backend can be wired in without
 changing the three.js frontend protocol.
 
 Controls in the browser:
@@ -34,12 +34,11 @@ from urllib.parse import parse_qs, urlparse
 
 DEMO_DIR = Path(__file__).resolve().parent
 REPO_ROOT = DEMO_DIR.parent
-PROGRAM_DIR = REPO_ROOT / "programs" / "nbody"
+PROGRAM_DIR = REPO_ROOT / "software" / "programs" / "nbody"
 VENDOR_DIR = DEMO_DIR / "vendor"
 DATASET_DIR = PROGRAM_DIR / "datasets"
-BAREMETAL_DIR = REPO_ROOT / "host" / "baremetal"
-if str(BAREMETAL_DIR) not in sys.path:
-    sys.path.insert(0, str(BAREMETAL_DIR))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 NUM_BODIES = 32
 DEFAULT_HTTP_HOST = "0.0.0.0"
@@ -385,10 +384,10 @@ class FpgaNbody3DBackend(Backend):
             )
 
         try:
-            from gpgpu_uart import GpgpuUartMonitor, read_mem_file
+            from tools.board.xc7z020.uart import GpgpuUartMonitor, read_mem_file
         except ImportError as exc:
             raise RuntimeError(
-                "FPGA backend requires host/baremetal/gpgpu_uart.py and pyserial. "
+                "FPGA backend requires tools/board/xc7z020/uart.py and pyserial. "
                 "Install pyserial in the active environment if import failed because serial is missing."
             ) from exc
 
@@ -1073,8 +1072,8 @@ def worker_loop(state: SharedState, commands: "queue.Queue[tuple[str, Any]]", ba
         backend.close()
 
 
-def default_imem() -> Path:
-    return PROGRAM_DIR / "nbody-3d_instructions.mem"
+def default_imem(build_root: Path) -> Path:
+    return build_root / "software" / "programs" / "nbody" / "nbody_instructions.mem"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -1083,7 +1082,8 @@ def build_parser() -> argparse.ArgumentParser:
     mode.add_argument("--fake", action="store_true", help="Use the local software backend")
     mode.add_argument("--port", help="FPGA UART serial port, e.g. /dev/ttyUSB1")
     parser.add_argument("--baud", type=int, default=115200)
-    parser.add_argument("--imem", type=Path, default=default_imem())
+    parser.add_argument("--build-root", type=Path, default=REPO_ROOT / "build")
+    parser.add_argument("--imem", type=Path, default=None)
     parser.add_argument("--skip-load-imem", action="store_true")
     parser.add_argument("--data-base", type=parse_int_auto, default=DEFAULT_DATA_BASE_BYTES, help="DMEM byte address passed as GPGPU_ARGS[0]")
     parser.add_argument("--data-limit", type=parse_int_auto, default=DEFAULT_DATA_LIMIT_BYTES, help="End byte address of usable nbody-3d DMEM data region")
@@ -1092,7 +1092,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--dataset",
         default="default",
-        help="Fake-backend initial condition dataset name/path (default: default). Names are read from programs/nbody-3d/datasets/.",
+        help="Fake-backend initial condition dataset name/path (default: default). Names are read from software/programs/nbody-3d/datasets/.",
     )
     parser.add_argument("--http-host", default=DEFAULT_HTTP_HOST)
     parser.add_argument("--http-port", type=int, default=DEFAULT_HTTP_PORT)
@@ -1103,6 +1103,11 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main() -> int:
     args = build_parser().parse_args()
+    build_root = args.build_root.expanduser()
+    if not build_root.is_absolute():
+        build_root = REPO_ROOT / build_root
+    if args.imem is None:
+        args.imem = default_imem(build_root.resolve())
     if not args.fake and not args.port:
         raise SystemExit("Choose --fake or pass --port for the FPGA UART backend")
     dataset = load_dataset(args.dataset)

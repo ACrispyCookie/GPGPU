@@ -1,9 +1,35 @@
+# Build/output roots
+/build/
+/.Xil/
+
+# Vivado/project generated state
 *.jou
 *.log
 *.str
-*.csv
-*vitis/
-*vivado/
+*.wdb
+*.vcd
+*.bit
+*.ltx
+*.xsa
+*_vitis/
+*_vivado/
+*.logfile
+
+# Python/local environments
 venv/
-__pycache__
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# pydoit dependency database
+.doit.db*
+
+# Machine-local GPGPU overrides
+/config/local.yaml
+
+# Project-local notes not intended for publication
 SSOT.md
+
+# Data/log artifacts
+*.csv
