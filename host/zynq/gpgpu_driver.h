@@ -23,6 +23,10 @@
 #define GPGPU_STATUS_RUNNING   0x00000002U
 #define GPGPU_STATUS_STOPPED   0x00000004U
 
+#define IMEM_WORDS             2048U
+#define DMEM_WORDS             2048U
+#define MAX_WORDS              2048U
+
 /* Set to 0 to wait by polling REG_IRQ_STATUS, rather than a PS interrupt.
  * IRQ mode assumes the GPU is wired to Zynq IRQ_F2P[0] (GIC ID 61).
  */

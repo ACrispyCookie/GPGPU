@@ -1,4 +1,4 @@
-#include "gpgpu_host.h"
+#include "gpgpu_driver.h"
 
 #include "xuartps.h"
 #include "xparameters.h"

@@ -1,4 +1,4 @@
-#include "gpgpu_host.h"
+#include "gpgpu_driver.h"
 #include <stddef.h>
 
 #include "xil_io.h"
