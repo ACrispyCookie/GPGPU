@@ -1,5 +1,43 @@
 # ECE338-Parallel-Computer-Architecture
 
+## SMX RTL simulation (Verilator)
+
+The CLI SMX flow requires Verilator, GNU make, and a C++ compiler. Configure
+`tools.verilator.command`, `tools.make.command`, and `tools.native_cxx.command`
+in `config/local.yaml` for machine-specific installations. Icarus/vvp are not
+used. Python dependencies are initialized by `./gpgpu` (using uv when available).
+
+```bash
+./gpgpu run tests:rtl:smx:build
+./gpgpu run tests:rtl:smx:run
+./gpgpu run tests:rtl:smx:all
+./gpgpu --set tests.rtl.random.iterations=3 --set tests.rtl.random.seed=12345 run tests:rtl:random
+./gpgpu --set tests.rtl.smx.trace=true run tests:rtl:smx:all
+```
+
+`architecture.num_cores` controls both expected-memory generation and the compiled
+bench parameter. Compilation selects production `.sv` sources from
+`hardware/rtl/gpgpu` and its `control/`, `memory/`, and `sp/` directories, with
+`MemoryInterface.sv` before consumers; `.svh` headers are cache dependencies.
+The top module is `tb_GPGPU_smx_only` in `tests/hardware/rtl/tb_GPGPU.sv`.
+Experimental benches and AXI wrappers are excluded.
+
+Generated C++, objects, the native `main` binary, `build.log`, and `simulation.log`
+stay under `<paths.build.root>/tests/rtl/smx/`. Runtime uses this directory with
+a `cases` link to the test inputs, so pipeline timing diagram `trace.csv` files
+remain in `tests/hardware/rtl/cases/test*/`. Enabling `tests.rtl.smx.trace`
+combines compile-time `--trace` and runtime `+DUMP`, producing `dumpfile.vcd`
+in the SMX build directory. `--plain` keeps console output without the monitor.
+The build cache tracks sources, headers, compiler command/options, make, C++
+compiler, and core count. Random testing reuses the same compiled executable,
+prints reproducible seeds, logs to `<paths.build.root>/tests/rtl/random/random.log`,
+and preserves the first failing `cases/test999` input.
+
+**E2E is deferred and unverified.** `tests:rtl:e2e:{build,run,all}` fail with an
+explicit diagnostic without executing the E2E bench. The aggregate
+`tests:rtl:{build,run,all}` still request both suites and therefore also fail;
+they have not been silently redefined as SMX-only commands.
+
 ## Running programs on FPGA
 
 The repository has a generic flow for compiling a program, loading it on the FPGA through UART, running it in chunks, dumping a program-defined output window, and optionally visualizing the results.  The root entry point is `./run.sh`; the program-specific behavior lives under `programs/<program>/`.

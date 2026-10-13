@@ -194,8 +194,6 @@ def main():
                         help="Base seed used to reproduce a random-test run")
     parser.add_argument("--python", default=sys.executable,
                         help="Python command used for the test generators")
-    parser.add_argument("--vvp", default="vvp",
-                        help="Configured vvp command")
     parser.add_argument("--simulator", type=Path, default=Path("./main"),
                         help="Precompiled SMX simulator executable")
     parser.add_argument("--test-root", type=Path, default=Path.cwd(),
@@ -210,8 +208,12 @@ def main():
         parser.error("--num-cores must be at least 1")
 
     random_test_dir = args.test_root.resolve() / RANDOM_TEST_DIR
-    if not os.path.exists(random_test_dir):
-        os.makedirs(random_test_dir)
+    # Claim scratch ownership exclusively; never overwrite a directed case or
+    # a preserved failure from an earlier run (including symlink targets).
+    try:
+        random_test_dir.mkdir(parents=True)
+    except FileExistsError:
+        parser.error(f"Random scratch case already exists: {random_test_dir}; move or remove it before rerunning")
         
     asm_filepath = os.path.join(random_test_dir, "program.asm")
     tools_dir = Path(__file__).resolve().parent
@@ -251,8 +253,6 @@ def main():
             # The tests:rtl:smx:build dependency compiles the simulator once.
             returncode, simulation_output = run_simulation(
                 [
-                    args.vvp,
-                    "-i",
                     str(args.simulator.resolve()),
                     f"+TEST_IDX={RANDOM_TEST_INDEX}",
                     f"+TEST_END={RANDOM_TEST_INDEX}",
@@ -277,6 +277,12 @@ def main():
                 # 5. Cleanup to prevent clogging
                 clean_random_test_files(random_test_dir)
                 
+        # Only this run's newly created scratch directory is ours to remove.
+        # Never recursively delete: leave unexpected files untouched.
+        Path(asm_filepath).unlink()
+        if not any(random_test_dir.iterdir()):
+            random_test_dir.rmdir()
+
         print_and_log("\n==================================================================", log)
         print_and_log(f"SUCCESS! All {args.iterations} random tests passed flawlessly.", log)
         print_and_log("==================================================================", log)

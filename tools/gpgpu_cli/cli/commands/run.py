@@ -43,25 +43,25 @@ Example: `software:programs:simple:x86`
 
 • `tests:rtl:generate` — Generate shared test programs and expected-memory files.
 
-• `tests:rtl:e2e:build` — Build the end-to-end `tb_GPGPU_e2e.v` suite.
+• `tests:rtl:e2e:build` — Deferred: fail explicitly until the E2E bench is migrated.
 
-• `tests:rtl:e2e:run` — Run the end-to-end suite through the host command interface.
+• `tests:rtl:e2e:run` — Deferred: E2E interface migration is not verified.
 
-• `tests:rtl:e2e:all` — Generate, build, and run the end-to-end suite.
+• `tests:rtl:e2e:all` — Deferred: no E2E simulation is executed.
 
-• `tests:rtl:smx:build` — Build the SMX-only `tb_GPGPU.v` suite.
+• `tests:rtl:smx:build` — Build `tb_GPGPU.sv` with Verilator (top `tb_GPGPU_smx_only`).
 
 • `tests:rtl:smx:run` — Run the SMX-only suite with direct memory access.
 
-• `tests:rtl:smx:all` — Generate, build, and run the SMX-only suite.
+• `tests:rtl:smx:all` — Generate, build, and run the SMX-only suite. Set `tests.rtl.smx.trace=true` for VCD tracing.
 
 • `tests:rtl:random` — Generate and run reproducible random programs on the SMX testbench. Configure the run with `tests.rtl.random.iterations` and `tests.rtl.random.seed`.
 
-• `tests:rtl:build` — Build both the end-to-end and SMX-only suites.
+• `tests:rtl:build` — Request both suites; fails explicitly while E2E is deferred.
 
-• `tests:rtl:run` — Run both RTL suites.
+• `tests:rtl:run` — Request both RTL suites; fails explicitly while E2E is deferred.
 
-• `tests:rtl:all` — Generate, build, and run both RTL suites.
+• `tests:rtl:all` — Request both suites; cannot report full success while E2E is deferred.
 
 [bold cyan]Vivado[/bold cyan]
 

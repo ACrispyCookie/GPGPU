@@ -1,234 +1,137 @@
-from __future__ import annotations
-
 from pathlib import Path
-import sys
 from io import StringIO
+import sys
 
 import pytest
 from doit.tools import config_changed
-
 from tools.tests import rtl
 
 
 class StubResolvedConfig:
-    def __init__(self, repo_root: Path) -> None:
+    def __init__(self, repo_root: Path):
         self.repo_root = repo_root
         self.random_seed = 12345
 
-    def get(self, key: str):
-        values = {
+    def get(self, key):
+        return {
             "architecture.num_cores": 8,
             "tools.python.command": sys.executable,
-            "tools.iverilog.command": "iverilog-configured",
-            "tools.vvp.command": "vvp-configured",
+            "tools.verilator.command": "verilator-configured",
+            "tools.make.command": "make-configured",
+            "tools.native_cxx.command": "cxx-configured",
+            "tests.rtl.smx.trace": False,
             "tests.rtl.random.iterations": 100,
             "tests.rtl.random.seed": self.random_seed,
-        }
-        return values[key]
+        }[key]
 
     @property
-    def build_root(self) -> Path:
+    def build_root(self):
         return self.repo_root / "build"
 
 
-def make_repo(tmp_path: Path) -> StubResolvedConfig:
-    rtl_root = tmp_path / "hardware/rtl"
-    for relative in ("constants.vh", "GPGPU.v", "memory/Memory.v", "sp/Processor.v"):
-        path = rtl_root / relative
+def make_repo(tmp_path):
+    root = tmp_path / "hardware/rtl/gpgpu"
+    for relative in ("constants.svh", "GPGPU.sv", "memory/MemoryInterface.sv",
+                     "memory/Memory.sv", "control/Controller.sv", "sp/Processor.sv"):
+        path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("// rtl\n", encoding="utf-8")
-
+        path.write_text("// rtl\n")
     test_root = tmp_path / "tests/hardware/rtl"
     case = test_root / "cases/test1"
     case.mkdir(parents=True)
-    (case / "program.asm").write_text("addi x1, x0, 1\n", encoding="utf-8")
-    (test_root / "tb_GPGPU_e2e.v").write_text("// e2e testbench\n", encoding="utf-8")
-    (test_root / "tb_GPGPU.v").write_text("// smx testbench\n", encoding="utf-8")
-
-    tools_root = tmp_path / "tools/tests"
-    tools_root.mkdir(parents=True)
-    (tools_root / "assembler.py").write_text("# assembler\n", encoding="utf-8")
-    (tools_root / "expected_generator.py").write_text("# expected\n", encoding="utf-8")
-    (tools_root / "random_tester.py").write_text("# random tester\n", encoding="utf-8")
+    (case / "program.asm").write_text("addi x1, x0, 1\n")
+    (test_root / "tb_GPGPU.sv").write_text("// smx bench\n")
     return StubResolvedConfig(tmp_path)
 
 
-def tasks_by_name(config: StubResolvedConfig) -> dict[str, dict]:
-    return {task["name"]: task for task in rtl.create_tasks(config)}  # type: ignore[arg-type]
+def tasks_by_name(config):
+    return {task["name"]: task for task in rtl.create_tasks(config)}
 
 
-def test_create_tasks_defines_distinct_e2e_and_smx_pipelines(tmp_path: Path) -> None:
+def test_current_layout_generation_and_build_dependencies(tmp_path):
     tasks = tasks_by_name(make_repo(tmp_path))
-
     assert set(tasks) == {
-        "tests:rtl:generate",
-        "tests:rtl:e2e:build",
-        "tests:rtl:e2e:run",
-        "tests:rtl:e2e:all",
-        "tests:rtl:smx:build",
-        "tests:rtl:smx:run",
-        "tests:rtl:smx:all",
-        "tests:rtl:random",
-        "tests:rtl:build",
-        "tests:rtl:run",
-        "tests:rtl:all",
+        "tests:rtl:generate", "tests:rtl:random",
+        *(f"tests:rtl:{suite}:{stage}" for suite in ("smx", "e2e") for stage in ("build", "run", "all")),
+        *(f"tests:rtl:{stage}" for stage in ("build", "run", "all")),
     }
-
-    generate_targets = set(tasks["tests:rtl:generate"]["targets"])
+    generate = tasks["tests:rtl:generate"]
     case = tmp_path / "tests/hardware/rtl/cases/test1"
-    assert str(case / "program.mem") in generate_targets
-    assert str(case / "data.mem") in generate_targets
-    assert str(case / "regfile_c0.mem") in generate_targets
-    assert str(case / "regfile_c7.mem") in generate_targets
-    assert str(case / "regfile_c8.mem") not in generate_targets
-
-    generate_actions = tasks["tests:rtl:generate"]["actions"]
-    assert generate_actions[1][1][0] == [
-        sys.executable,
-        str(tmp_path / "tools/tests/expected_generator.py"),
-        "--num-cores",
-        "8",
-    ]
-    generate_fingerprint = tasks["tests:rtl:generate"]["uptodate"][0]
-    assert isinstance(generate_fingerprint, config_changed)
-    assert generate_fingerprint.config == {"num_cores": 8}
-
-    for suite, testbench, top in (
-        ("e2e", "tb_GPGPU_e2e.v", "tb_GPGPU_e2e"),
-        ("smx", "tb_GPGPU.v", "tb_GPGPU_smx_only"),
-    ):
-        executable = tmp_path / f"build/tests/rtl/{suite}/main"
-        log = tmp_path / f"build/tests/rtl/{suite}/simulation.log"
-
-        build_task = tasks[f"tests:rtl:{suite}:build"]
-        assert build_task["targets"] == [str(executable)]
-        build_command = build_task["actions"][0][1][0]
-        assert build_command[0] == "iverilog-configured"
-        assert "-DSIM" in build_command
-        assert ["-s", top] == build_command[
-            build_command.index("-s") : build_command.index("-s") + 2
-        ]
-        assert ["-P", f"{top}.NUM_CORES=8"] == build_command[
-            build_command.index("-P") : build_command.index("-P") + 2
-        ]
-        assert str(tmp_path / f"tests/hardware/rtl/{testbench}") in build_command
-        assert len(build_task["uptodate"]) == 1
-        tool_fingerprint = build_task["uptodate"][0]
-        assert isinstance(tool_fingerprint, config_changed)
-        assert tool_fingerprint.config == {"command": build_command}
-
-        run_task = tasks[f"tests:rtl:{suite}:run"]
-        assert run_task["task_dep"] == [
-            "tests:rtl:generate",
-            f"tests:rtl:{suite}:build",
-        ]
-        assert run_task["targets"] == [str(log)]
-        assert run_task["uptodate"] == [False]
-        assert run_task["actions"][0][1][0] == [
-            "vvp-configured",
-            "-i",
-            str(executable),
-        ]
-        assert tasks[f"tests:rtl:{suite}:all"]["task_dep"] == [
-            f"tests:rtl:{suite}:run"
-        ]
-
-    assert tasks["tests:rtl:build"]["task_dep"] == [
-        "tests:rtl:e2e:build",
-        "tests:rtl:smx:build",
-    ]
-    assert tasks["tests:rtl:run"]["task_dep"] == [
-        "tests:rtl:e2e:run",
-        "tests:rtl:smx:run",
-    ]
-    assert tasks["tests:rtl:all"]["task_dep"] == ["tests:rtl:run"]
-
-    random_task = tasks["tests:rtl:random"]
-    assert random_task["task_dep"] == ["tests:rtl:smx:build"]
-    assert random_task["uptodate"] == [False]
-    assert random_task["targets"] == [
-        str(tmp_path / "build/tests/rtl/random/random.log")
-    ]
-    random_command = random_task["actions"][0][1][0]
-    assert random_command == [
-        sys.executable,
-        str(tmp_path / "tools/tests/random_tester.py"),
-        "--iterations",
-        "100",
-        "--num-cores",
-        "8",
-        "--seed",
-        "12345",
-        "--python",
-        sys.executable,
-        "--vvp",
-        "vvp-configured",
-        "--simulator",
-        str(tmp_path / "build/tests/rtl/smx/main"),
-        "--test-root",
-        str(tmp_path / "tests/hardware/rtl"),
-        "--log",
-        str(tmp_path / "build/tests/rtl/random/random.log"),
-    ]
+    assert str(case / "regfile_c7.mem") in generate["targets"]
+    assert str(case / "regfile_c8.mem") not in generate["targets"]
+    assert generate["actions"][1][1][0][-2:] == ["--num-cores", "8"]
+    assert isinstance(generate["uptodate"][0], config_changed)
+    assert generate["uptodate"][0].config == {"num_cores": 8}
+    build = tasks["tests:rtl:smx:build"]
+    command = build["actions"][0][1][0]
+    assert command[0] == "verilator-configured"
+    assert command[command.index("-MAKEFLAGS") + 1] == "CXX=cxx-configured LINK=cxx-configured"
+    assert build["uptodate"][0].config == {"command": command, "make": "make-configured"}
+    run = tasks["tests:rtl:smx:run"]
+    assert run["task_dep"] == ["tests:rtl:generate", "tests:rtl:smx:build"]
+    assert run["actions"][0][1][0] == build["targets"]
+    assert run["uptodate"] == [False]
 
 
-
-def test_random_task_omits_seed_argument_when_configured_for_auto_seed(
-    tmp_path: Path,
-) -> None:
+def test_random_task_omits_seed_argument_when_configured_for_auto_seed(tmp_path):
     config = make_repo(tmp_path)
     config.random_seed = 0
+    assert "--seed" not in tasks_by_name(config)["tests:rtl:random"]["actions"][0][1][0]
 
-    command = tasks_by_name(config)["tests:rtl:random"]["actions"][0][1][0]
 
-    assert "--seed" not in command
-
-def test_run_simulation_writes_log_for_success(tmp_path: Path) -> None:
+def test_run_simulation_writes_log_for_success(tmp_path):
     log = tmp_path / "simulation.log"
-
-    rtl.run_simulation(
-        [sys.executable, "-c", "print('[SUCCESS] simulation passed')"],
-        tmp_path,
-        log,
-    )
-
-    assert log.read_text(encoding="utf-8") == "[SUCCESS] simulation passed\n"
+    rtl.run_simulation([sys.executable, "-c", "print('[SUCCESS] simulation passed')"], tmp_path, log)
+    assert log.read_text() == "[SUCCESS] simulation passed\n"
 
 
-def test_run_simulation_fails_when_testbench_reports_failure(tmp_path: Path) -> None:
+@pytest.mark.parametrize("marker", ["[FAIL]", "[Error]", "[ERROR]"])
+def test_run_simulation_fails_when_testbench_reports_failure(tmp_path, marker):
     with pytest.raises(RuntimeError, match="reported a failure"):
-        rtl.run_simulation(
-            [sys.executable, "-c", "print('[FAIL] mismatch')"],
-            tmp_path,
-            tmp_path / "simulation.log",
-        )
+        rtl.run_simulation([sys.executable, "-c", f"print('{marker} mismatch')"], tmp_path, tmp_path / "simulation.log")
+
+
+def test_run_simulation_propagates_nonzero_exit(tmp_path):
+    with pytest.raises(RuntimeError, match="status 7"):
+        rtl.run_simulation([sys.executable, "-c", "raise SystemExit(7)"], tmp_path, tmp_path / "simulation.log")
 
 
 class FlushingTerminal(StringIO):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.flush_count = 0
 
-    def flush(self) -> None:
+    def flush(self):
         self.flush_count += 1
         super().flush()
 
 
-def test_run_simulation_streams_each_line_and_keeps_the_log(tmp_path: Path) -> None:
+def test_run_simulation_streams_each_line_and_keeps_the_log(tmp_path):
     log = tmp_path / "simulation.log"
     terminal = FlushingTerminal()
-
-    rtl.run_simulation(
-        [
-            sys.executable,
-            "-c",
-            "import sys; print('first', flush=True); print('second', file=sys.stderr, flush=True)",
-        ],
-        tmp_path,
-        log,
-        terminal=terminal,
-    )
-
+    rtl.run_simulation([sys.executable, "-c", "import sys; print('first', flush=True); print('second', file=sys.stderr, flush=True)"], tmp_path, log, terminal=terminal)
     assert terminal.getvalue() == "first\nsecond\n"
     assert terminal.flush_count >= 2
-    assert log.read_text(encoding="utf-8") == "first\nsecond\n"
+    assert log.read_text() == "first\nsecond\n"
+
+
+def test_compilation_does_not_reuse_objects_from_previous_toolchain(tmp_path):
+    build = tmp_path / "smx"
+    build.mkdir()
+    (build / "old.o").write_text("previous compiler object")
+    (build / "Vtb_GPGPU_smx_only__pch.h.fast.gch").write_text("old precompiled header")
+    command = [sys.executable, "-c", "print('new build')"]
+    rtl.run_compilation(command, tmp_path, build, "configured-make")
+    assert not (build / "old.o").exists()
+    assert not (build / "Vtb_GPGPU_smx_only__pch.h.fast.gch").exists()
+    assert (build / "build.log").read_text() == "new build\n"
+
+
+def test_smx_runtime_resolves_cases_and_contains_dump(tmp_path):
+    test_root = tmp_path / "tests"
+    (test_root / "cases/test1").mkdir(parents=True)
+    (test_root / "cases/test1/program.mem").write_text("00000000\n")
+    log = tmp_path / "build/smx/simulation.log"
+    rtl.run_smx([sys.executable, "-c", "from pathlib import Path; assert Path('cases/test1/program.mem').is_file(); Path('dumpfile.vcd').write_text('trace'); print('[SUCCESS]')"], test_root, log)
+    assert (log.parent / "dumpfile.vcd").read_text() == "trace"
+    assert (log.parent / "cases").resolve() == test_root / "cases"

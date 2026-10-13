@@ -78,6 +78,8 @@ module tb_GPGPU_smx_only ();
                 $display("\n[INFO] Reached requested TEST_END=%0d. Simulation finished successfully!", test_end);
                 #(`CLOCK_PERIOD * 20);
                 $finish;
+                // The simulator can continue this time slot after $finish.
+                break;
             end
 
             $sformat(prog_file, "cases/test%0d/program.mem", test_idx);
@@ -92,6 +94,8 @@ module tb_GPGPU_smx_only ();
 
                 #(`CLOCK_PERIOD * 20);
                 $finish;
+                // The simulator can continue this time slot after $finish.
+                break;
             end
             $fclose(fd);
 
