@@ -51,6 +51,9 @@ software:
 
 tests:
   rtl:
+    smx:
+      # Compile with --trace and run with +DUMP; VCD stays in build/tests/rtl/smx.
+      trace: false
     random:
       iterations: 100
       # Set a non-zero integer for reproducibility; 0 chooses and prints a seed.
@@ -77,11 +80,11 @@ tools:
   riscv_gcc:
     command: riscv64-unknown-elf-gcc
     required: true
-  iverilog:
-    command: iverilog
+  verilator:
+    command: verilator
     required: true
-  vvp:
-    command: vvp
+  native_cxx:
+    command: g++
     required: true
   vivado:
     command: vivado
