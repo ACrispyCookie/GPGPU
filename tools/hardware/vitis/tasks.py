@@ -15,7 +15,7 @@ import zipfile
 
 from doit.tools import config_changed
 from src.project_paths import ProjectPaths
-from tools.hardware.contract import axi_address, xsa_path
+from src.hardware_contract import axi_address, xsa_path
 
 _TEXT_SUFFIXES = {'', '.c', '.cmake', '.h', '.ini', '.json', '.ld', '.md', '.py', '.tcl', '.txt', '.yaml', '.yml'}
 _EXCLUDED_SUFFIXES = {'.a', '.bit', '.d', '.elf', '.log', '.o', '.obj', '.xsa'}

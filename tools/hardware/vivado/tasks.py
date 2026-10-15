@@ -14,7 +14,7 @@ import zipfile
 
 from doit.tools import config_changed
 from src.project_paths import ProjectPaths
-from tools.hardware.contract import axi_address, identifier, xsa_path
+from src.hardware_contract import axi_address, identifier, xsa_path
 
 
 def _source_files(root):
@@ -307,7 +307,7 @@ def create_tasks(config):
         return [vendor, '-mode', 'batch', '-source', str(scripts / script), '-tclargs',
                 *(item for key, value in values.items() for item in ('-' + key, str(value)))]
 
-    shared = [str(scripts / 'common.tcl'), str(Path(__file__)), str(repo / 'tools/hardware/contract.py')]
+    shared = [str(scripts / 'common.tcl'), str(Path(__file__)), str(repo / 'tools/gpgpu_tasks/src/hardware_contract.py')]
     executable = shutil.which(vendor)
     if executable:
         shared.append(str(Path(executable).resolve()))
