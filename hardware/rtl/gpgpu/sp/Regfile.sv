@@ -1,46 +1,44 @@
-module Regfile
-    import gpu_pkg::*;
-#(
+module Regfile  #(
     parameter CORE_ID = 0
 )(
-    input logic clk, rst, i_wen,
-    input word_t i_wdata,
-    input reg_addr_t i_addr_a, i_addr_b, i_waddr,
-    input logic i_global_stall,
-    output word_t o_reg_a, o_reg_b
+    input clk, rst, i_wen,
+    input [31:0] i_wdata,
+    input [4:0] i_addr_a, i_addr_b, i_waddr,
+    input i_global_stall,
+    output reg [31:0] o_reg_a, o_reg_b
 );
-    word_t data [REG_COUNT-1:0];
+    reg [31:0] data [31:0];
+    integer i;
 
-    //TODO Fix tid forwarding bug
     //! Read
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         if (!rst) begin
-            o_reg_a <= '0;
-            o_reg_b <= '0;
+            o_reg_a <= 32'b0;
+            o_reg_b <= 32'b0;
         end else if (!i_global_stall && !i_wen) begin
             //! Output the data when write is disabled
-            o_reg_a <= (i_addr_a == 5'b0) ? '0 : data[i_addr_a];
-            o_reg_b <= (i_addr_b == 5'b0) ? '0 : data[i_addr_b];
+            o_reg_a <= (i_addr_a == 5'b0) ? 32'b0 : data[i_addr_a];
+            o_reg_b <= (i_addr_b == 5'b0) ? 32'b0 : data[i_addr_b];
         end else if (!i_global_stall) begin
             //! Read the same address you want to write, forward the data
-            o_reg_a <= (i_addr_a == 5'b0) ? '0 : ((i_addr_a == i_waddr) ? i_wdata : data[i_addr_a]);
-            o_reg_b <= (i_addr_b == 5'b0) ? '0 : ((i_addr_b == i_waddr) ? i_wdata : data[i_addr_b]);
+            o_reg_a <= (i_addr_a == 5'b0) ? 32'b0 : ((i_addr_a == i_waddr) ? i_wdata : data[i_addr_a]);
+            o_reg_b <= (i_addr_b == 5'b0) ? 32'b0 : ((i_addr_b == i_waddr) ? i_wdata : data[i_addr_b]);
         end
     end
-
+    
     //! Write
-    always_ff @(posedge clk) begin
+    always @(posedge clk) begin
         if (!rst) begin
-            for (int i = 0; i < REG_COUNT; i++) begin
+            for (i = 0; i < 32; i = i + 1) begin
                 if (i == 2) begin
-                    data[i] <= STACK_P_INIT;
-                end else if (i == TXD_REGISTER) begin
+                    data[i] <= `STACK_P_INIT;
+                end else if (i == `TXD_REGISTER) begin
                     data[i] <= CORE_ID;
                 end else begin
-                    data[i] <= '0;
+                    data[i] <= 32'b0;
                 end
             end
-        end else if (!i_global_stall && i_wen && (i_waddr != 5'b0) && (i_waddr != TXD_REGISTER)) begin
+        end else if (!i_global_stall && i_wen && (i_waddr != 5'b0) && (i_waddr != `TXD_REGISTER)) begin
             data[i_waddr] <= i_wdata;
         end
     end

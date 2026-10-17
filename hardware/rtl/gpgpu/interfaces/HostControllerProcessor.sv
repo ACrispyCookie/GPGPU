@@ -1,5 +1,3 @@
-`include "../constants.svh"
-
 module HostCommandProcessor (
     input clk,
     input rst,
