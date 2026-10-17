@@ -13,8 +13,8 @@ module Decoder
     wire [6:0] funct7 = i_instr[31:25];
 
     //! Extract fields from instruction
-    opcode_t opcode = opcode_t'(i_instr[6:0]);
-
+    opcode_t opcode;
+    assign opcode = opcode_t'(i_instr[6:0]);
 
     //! Determine ALU operation based on opcode and funct fields
     always_comb begin
