@@ -1,8 +1,11 @@
 `include "constants.svh"
 
-module GPGPU #(
-    parameter SP_PER_SM = 32,
-    parameter MEMORY_INIT = "empty.mem"
+module GPGPU
+    import gpu_pkg::*;
+    import control_pkg::*;
+#(
+    parameter int unsigned SP_PER_SM = 32,
+    parameter string MEMORY_INIT = "empty.mem"
 ) (
     input logic clk,
     input logic rst_n,
@@ -14,14 +17,14 @@ module GPGPU #(
     input logic i_req_valid,
     output logic o_req_ready,
     input logic i_req_write,
-    input logic [31:0] i_req_addr,
-    input logic [31:0] i_req_wdata,
+    input word_t i_req_addr,
+    input word_t i_req_wdata,
     input logic [3:0] i_req_wstrb,
 
     // Response signals
     output logic o_rsp_valid,
     input logic i_rsp_ready,
-    output logic [31:0] o_rsp_rdata,
+    output word_t o_rsp_rdata,
     output logic [2:0] o_rsp_status,
 
     output logic o_irq
@@ -33,23 +36,23 @@ module GPGPU #(
     logic core_complete, complete_pulse, stopped;
     logic control_start, control_stop, clear_stopped;
     logic core_reset;
-    assign core_reset = core_state == `CORE_RESET;
-    assign o_core_idle = core_state == `CORE_IDLE;
-    assign o_core_running = core_state == `CORE_RUNNING;
+    assign core_reset = core_state == CORE_RESET;
+    assign o_core_idle = core_state == CORE_IDLE;
+    assign o_core_running = core_state == CORE_RUNNING;
 
     // CSR access description/commit. Register actions go directly to State.
     logic csr_write_fire;
-    logic [31:0] csr_rdata;
+    word_t csr_rdata;
     logic [2:0] csr_status;
 
     // Host memory path bypasses the CSR bank.
-    MemoryInterface #(.ADDR_WIDTH(`IMEM_AW)) host_imem ();
-    MemoryInterface #(.ADDR_WIDTH(`DMEM_AW)) host_dmem ();
+    MemoryInterface #(.ADDR_WIDTH(IMEM_AW)) host_imem ();
+    MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) host_dmem ();
 
     // SMX memory signals
-    MemoryInterface #(.ADDR_WIDTH(`DMEM_AW)) core_dmem_a ();
-    MemoryInterface #(.ADDR_WIDTH(`DMEM_AW)) core_dmem_b ();
-    logic [`IMEM_AW-1:0] core_imem_addr;
+    MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) core_dmem_a ();
+    MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) core_dmem_b ();
+    imem_idx_t core_imem_addr;
     logic core_imem_ren;
 
     assign dmem_if_a.addr = o_core_running ? core_dmem_a.addr : host_dmem.addr;
@@ -116,12 +119,12 @@ module GPGPU #(
     );
 
     MemoryInterface #(
-        .ADDR_WIDTH($clog2(`IMEM_ENTRIES))
+        .ADDR_WIDTH(IMEM_AW)
     ) imem_if ();
 
     (* dont_touch = `DEBUG *)
     MemorySinglePort #(
-        .DEPTH(`IMEM_ENTRIES),
+        .DEPTH(IMEM_ENTRIES),
         .INIT_FILE(MEMORY_INIT)
     ) instructionMemory (
         .clk(clk),
@@ -129,16 +132,16 @@ module GPGPU #(
     );
 
     MemoryInterface #(
-        .ADDR_WIDTH($clog2(`DMEM_ENTRIES))
+        .ADDR_WIDTH(DMEM_AW)
     ) dmem_if_a ();
 
     MemoryInterface #(
-        .ADDR_WIDTH($clog2(`DMEM_ENTRIES))
+        .ADDR_WIDTH(DMEM_AW)
     ) dmem_if_b ();
 
     (* dont_touch = `DEBUG *)
     MemoryDualPort #(
-        .DEPTH(`DMEM_ENTRIES),
+        .DEPTH(DMEM_ENTRIES),
         .INIT_FILE(MEMORY_INIT)
     ) dataMemory (
         .clk(clk),

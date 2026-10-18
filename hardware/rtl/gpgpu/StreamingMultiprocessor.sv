@@ -6,12 +6,12 @@ module StreamingMultiprocessor
 #(
     parameter int unsigned NUM_CORES = 32
 )(
-    input clk,
-    input rst,
-    input i_enable,
+    input logic clk,
+    input logic rst,
+    input logic i_enable,
 
     input word_t i_ifid_instruction,
-    output logic [IMEM_AW-1:0] o_imem_addr,
+    output imem_idx_t o_imem_addr,
     output logic o_imem_ren,
 
     MemoryInterface.master dmem_a, dmem_b,
@@ -87,7 +87,7 @@ module StreamingMultiprocessor
     pc_t program_counter;
     imem_idx_t instr_idx;
 
-    GUCounter #(.BITS($clog2(IMEM_ENTRIES))) 
+    GUCounter #(.BITS(IMEM_AW)) 
         programCounter (.clk(clk), .i_set_reset({rst, ex_branch_taken}), .i_count_enable(!data_hazard && !global_stall), .i_count_set(ex_beq_target_idx + 1'b1), .o_count_cur(instr_idx));
 
     assign program_counter = {instr_idx, 2'b00};
@@ -143,13 +143,9 @@ module StreamingMultiprocessor
         end else if (global_stall) begin
             // Retain state during memory stall
         end else if (!decode_enabled || data_hazard) begin
-            idex <= '{
-                program_counter: ifid_program_counter,
-                alu_op: ALU_OP_INVALID,
-                instr_type: INSTR_TYPE_R,
-                opcode: OP_INVALID,
-                default: '0
-            };
+            idex <= '0;
+            idex.program_counter <= ifid_program_counter;
+            idex.alu_op <= ALU_OP_INVALID;
         end else begin
             idex <= decoded;
         end
@@ -163,6 +159,10 @@ module StreamingMultiprocessor
     assign sm_ex_is_load = (idex.opcode == OP_LW && idex.instr_type == INSTR_TYPE_I);
     logic sm_ex_is_mul;
     assign sm_ex_is_mul = (idex.opcode == OP_R_TYPE) && (idex.imm_31_25 == FUNCT7_MULDIV);
+    
+    //! SP wires
+    sp_feedback_t sp_feedback [0:NUM_CORES-1];
+    logic [NUM_CORES-1:0] core_complete;
 
     HazardUnit hazardUnit (
         .i_id_rs1(decoded.rs1),
@@ -224,8 +224,6 @@ module StreamingMultiprocessor
     //& ===============
     //& STREAMING PROCESSOR CORES
     //& ===============
-    logic [NUM_CORES-1:0] core_complete;
-    sp_feedback_t sp_feedback [0:NUM_CORES-1];
 
     // Since execution is lockstep, use Core 0 for shared hazard tracking
     assign ex_branch_taken = sp_feedback[0].branch_taken;

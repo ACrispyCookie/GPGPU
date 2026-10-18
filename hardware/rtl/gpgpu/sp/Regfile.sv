@@ -10,8 +10,8 @@ module Regfile
     output word_t o_reg_a, o_reg_b
 );
     word_t data [REG_COUNT-1:0];
+    wire write_allowed = (i_waddr != '0) && (i_waddr != TXD_REGISTER);
 
-    //TODO Fix tid forwarding bug
     //! Read
     always_ff @(posedge clk) begin
         if (!rst) begin
@@ -19,12 +19,14 @@ module Regfile
             o_reg_b <= '0;
         end else if (!i_global_stall && !i_wen) begin
             //! Output the data when write is disabled
-            o_reg_a <= (i_addr_a == 5'b0) ? '0 : data[i_addr_a];
-            o_reg_b <= (i_addr_b == 5'b0) ? '0 : data[i_addr_b];
+            o_reg_a <= (i_addr_a == '0) ? '0 : data[i_addr_a];
+            o_reg_b <= (i_addr_b == '0) ? '0 : data[i_addr_b];
         end else if (!i_global_stall) begin
             //! Read the same address you want to write, forward the data
-            o_reg_a <= (i_addr_a == 5'b0) ? '0 : ((i_addr_a == i_waddr) ? i_wdata : data[i_addr_a]);
-            o_reg_b <= (i_addr_b == 5'b0) ? '0 : ((i_addr_b == i_waddr) ? i_wdata : data[i_addr_b]);
+            o_reg_a <= (i_addr_a == '0) ? '0 :
+                       (write_allowed && i_addr_a == i_waddr) ? i_wdata : data[i_addr_a];
+            o_reg_b <= (i_addr_b == '0) ? '0 :
+                       (write_allowed && i_addr_b == i_waddr) ? i_wdata : data[i_addr_b];
         end
     end
 
@@ -40,7 +42,7 @@ module Regfile
                     data[i] <= '0;
                 end
             end
-        end else if (!i_global_stall && i_wen && (i_waddr != 5'b0) && (i_waddr != TXD_REGISTER)) begin
+        end else if (!i_global_stall && i_wen && write_allowed) begin
             data[i_waddr] <= i_wdata;
         end
     end

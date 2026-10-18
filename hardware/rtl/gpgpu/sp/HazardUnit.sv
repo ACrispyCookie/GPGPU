@@ -23,13 +23,10 @@ module HazardUnit
         o_flush = 1'b0;
 
         //! Standard ALU RAW Hazard
-        if (i_ex_is_load && (i_idex_rd != 5'b0)) begin
-            if (i_id_rs1 == i_idex_rd) begin
+        if (i_ex_is_load && (i_idex_rd != '0)) begin
+            if ((i_id_rs1 == i_idex_rd) ||
+                ((i_id_instr_type != INSTR_TYPE_I) && (i_id_rs2 == i_idex_rd))) begin
                 o_data_hazard = 1'b1;
-            end else if ((i_id_instr_type != INSTR_TYPE_I) && (i_id_rs2 == i_idex_rd)) begin
-                o_data_hazard = 1'b1;
-            end else begin
-                o_data_hazard = 1'b0;
             end
         end else if (i_branch_taken) begin
             o_data_hazard = 1'b1;
@@ -39,6 +36,7 @@ module HazardUnit
             //! inside EX.
         end else if ((i_ex_is_mul || i_mul1.valid || i_mul2.valid || i_mul3.valid) && !(
             i_id_is_mul &&
+            
             //! 1. Check dependency against the MUL currently in the EX stage
             (i_id_rs1 != i_idex_rd) && (i_id_rs2 != i_idex_rd) &&
 

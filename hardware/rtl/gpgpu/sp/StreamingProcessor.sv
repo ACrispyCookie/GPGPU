@@ -5,20 +5,20 @@ module StreamingProcessor
     import riscv_pkg::*;
     import pipeline_pkg::*;
 #(
-    parameter CORE_ID = 0
+    parameter int unsigned CORE_ID = 0
 )(
     input logic clk,
     input logic rst,
 
     //! Regfile Read Addresses
-    input gpu_pkg::reg_addr_t i_id_mux_rs1,
-    input gpu_pkg::reg_addr_t i_id_mux_rs2,
+    input reg_addr_t i_id_mux_rs1,
+    input reg_addr_t i_id_mux_rs2,
 
     //! Pipeline Register: IDEX -> EX
-    input pipeline_pkg::id_ex_t i_idex,
+    input id_ex_t i_idex,
 
     //! Hazard and Branch feedback
-    output pipeline_pkg::sp_feedback_t o_feedback,
+    output sp_feedback_t o_feedback,
 
     //! External Memory Interface
     MemoryInterface.requester memory,
@@ -33,20 +33,20 @@ module StreamingProcessor
     //! =========================================================================
     //! STAGE 3: EXECUTE
     //! =========================================================================
-    logic [31:0] ex_alu_out;
+    word_t ex_alu_out;
     logic ex_zero, ex_is_branch, ex_is_jal, ex_is_jalr;
     logic ex_branch_condition_met;
-    logic [31:0] ex_beq_offset, ex_jal_offset, ex_jalr_target_addr;
-    logic [31:0] ex_branch_operand_a, ex_branch_operand_b, ex_branch_target_addr;
-    logic [31:0] ex_imm_i_type, ex_imm_s_type, ex_imm_u_type;
-    logic [31:0] ex_reg_a, ex_reg_b;
-    logic [31:0] forwarded_rs2;
-    logic [31:0] ex_actual_alu_in_a;
-    logic [31:0] ex_actual_alu_in_b;
-    logic [1:0] forward_alu_a, forward_alu_b;
+    word_t ex_beq_offset, ex_jal_offset, ex_jalr_target_addr;
+    word_t ex_branch_operand_a, ex_branch_operand_b, ex_branch_target_addr;
+    word_t ex_imm_i_type, ex_imm_s_type, ex_imm_u_type;
+    word_t ex_reg_a, ex_reg_b;
+    word_t forwarded_rs2;
+    word_t ex_actual_alu_in_a;
+    word_t ex_actual_alu_in_b;
+    forward_sel_t forward_alu_a, forward_alu_b;
     logic ex_is_mul, mul_not_ready;
     mem_wb_t memwb;
-    logic [31:0] wb_wdata;
+    word_t wb_wdata;
 
     assign ex_is_mul = (i_idex.opcode == OP_R_TYPE) && (i_idex.imm_31_25 == FUNCT7_MULDIV); //! WARNING when adding DIV mul would be confused with div 
     assign ex_imm_i_type = {{20{i_idex.imm_31_20[11]}}, i_idex.imm_31_20};
@@ -128,12 +128,9 @@ module StreamingProcessor
     end
 
     //! Output MUL for Hazard Unit
-    assign o_feedback.mul1.valid = mul1.hazard.valid;
-    assign o_feedback.mul1.rd = mul1.hazard.rd;
-    assign o_feedback.mul2.valid = mul2.hazard.valid;
-    assign o_feedback.mul2.rd = mul2.hazard.rd;
-    assign o_feedback.mul3.valid = mul3.hazard.valid;
-    assign o_feedback.mul3.rd = mul3.hazard.rd;
+    assign o_feedback.mul1 = mul1.hazard;
+    assign o_feedback.mul2 = mul2.hazard;
+    assign o_feedback.mul3 = mul3.hazard;
     assign mul_not_ready = (ex_is_mul || mul1.hazard.valid || mul2.hazard.valid) && !mul3.hazard.valid;
 
     assign ex_is_branch = (i_idex.opcode == OP_BEQ);
@@ -185,11 +182,11 @@ module StreamingProcessor
                 mul3_valid: mul3.hazard.valid,
                 rd: mul3.hazard.valid ? mul3.hazard.rd : i_idex.rd,
                 opcode: mul3.hazard.valid ? OP_R_TYPE : i_idex.opcode,
-                wen: mul3.hazard.valid ? (mul3.hazard.rd != 5'b0) : (i_idex.wen && i_idex.rd != 5'b0),
+                wen: mul3.hazard.valid ? (mul3.hazard.rd != '0) : (i_idex.wen && i_idex.rd != '0),
                 core_complete: ex_is_jalr &&
-                               (i_idex.rd == 5'b0) &&
+                               (i_idex.rd == '0) &&
                                (i_idex.rs1 == 5'd1) &&
-                               (ex_imm_i_type == 32'b0),
+                               (ex_imm_i_type == '0),
                 program_counter: mul3.hazard.valid ? mul3.program_counter : i_idex.program_counter
             };
         end
@@ -234,12 +231,12 @@ module StreamingProcessor
     //! =========================================================================
     //! STAGE 5: WRITE BACK
     //! =========================================================================
-    logic [31:0] safe_wb_rdata;
+    word_t safe_wb_rdata;
     logic safe_wb_valid;
 
     always_ff @(posedge clk) begin
         if (!rst) begin
-            safe_wb_rdata <= 32'b0;
+            safe_wb_rdata <= '0;
             safe_wb_valid <= 1'b0;
         end else if (!i_global_stall) begin
             //! Pipeline is moving normally. Clear the vault for the next instruction.
