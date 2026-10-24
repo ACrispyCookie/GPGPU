@@ -21,7 +21,8 @@ FAKE_VENDOR = r'''
 import json, runpy, shutil, sys, zipfile
 from pathlib import Path
 args = sys.argv[1:]
-if args == ['-version']:
+# Match launcher's early-exit behavior even after -tclargs.
+if '-version' in args:
     print('FAKE Vivado 2025.2 -- orchestration fixture, not vendor verification')
     raise SystemExit(0)
 def put(path, value):

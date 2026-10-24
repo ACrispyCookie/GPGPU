@@ -4,7 +4,7 @@ array set options {
     -project-dir "" -project-name "" -part "" -bd-name "" -top ""
     -rtl-dir "" -xdc-file "" -bitstream-dir "" -platform-dir ""
     -xsa-name "" -export-file "" -num-cores "" -jobs ""
-    -repo-root "" -ip-repo-dir "" -axi-base "" -axi-range "" -version "" -ip-revision 1
+    -repo-root "" -ip-repo-dir "" -axi-base "" -axi-range "" -flow-version "" -ip-revision 1
 }
 foreach {key value} $argv {
     if {![info exists options($key)] || $value eq ""} {error "Invalid/missing Vivado argument: $key"}
@@ -18,7 +18,7 @@ foreach {key name} {
     -bd-name BD_NAME -top TOP_NAME -rtl-dir RTL_DIR -xdc-file XDC_FILE
     -bitstream-dir BITSTREAM_DIR -platform-dir PLATFORM_DIR -xsa-name XSA_NAME
     -export-file EXPORT_FILE -num-cores NUM_CORES -jobs JOBS -repo-root REPO_ROOT
-    -ip-repo-dir IP_REPO_DIR -axi-base AXI_BASE -axi-range AXI_RANGE -version FLOW_VERSION
+    -ip-repo-dir IP_REPO_DIR -axi-base AXI_BASE -axi-range AXI_RANGE -flow-version FLOW_VERSION
     -ip-revision IP_REVISION
 } {set $name $options($key)}
 foreach name {PROJECT_DIR RTL_DIR XDC_FILE BITSTREAM_DIR PLATFORM_DIR EXPORT_FILE REPO_ROOT IP_REPO_DIR} {

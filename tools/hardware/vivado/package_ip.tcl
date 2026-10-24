@@ -27,6 +27,12 @@ foreach input $inputs {
     }
 }
 open_project $PROJECT_FILE
+# Do this BEFORE the packager parses HDL. Global includes are not preserved in
+# packaged IP; every macro consumer explicitly includes its sibling header.
+set_property is_global_include false [get_files [file join $PROJECT_DIR src constants.svh]]
+foreach fileset {sources_1 sim_1} {
+    set_property include_dirs {} [get_filesets $fileset]
+}
 ipx::package_project -root_dir $IP_REPO_DIR -vendor user.org -library user -taxonomy /UserIP -import_files -set_current true
 set core [ipx::current_core]
 set_property name gpgpu_axi $core
@@ -104,9 +110,26 @@ foreach input $inputs {
     }
     lappend package_files $relative
 }
-foreach group_name {xilinx_anylanguagesynthesis_view_fileset xilinx_anylanguagebehavioralsimulation_view_fileset} {
-    set group [ipx::get_file_groups $group_name -of_objects $core]
-    if {[llength $group] != 1} {error "Missing packaged HDL fileset: $group_name"}
+# In Vivado 2025.2, TYPE is synthesis/simulation; the xilinx_* names below
+# are add_file_group templates, NOT the values returned by get_property TYPE.
+# Reuse the imported groups regardless of their names/languages.
+foreach {role template} {
+    synthesis xilinx_anylanguagesynthesis
+    simulation xilinx_anylanguagebehavioralsimulation
+} {
+    set groups {}
+    foreach candidate [ipx::get_file_groups -of_objects $core] {
+        if {[get_property type $candidate] eq $role} {lappend groups $candidate}
+    }
+    if {[llength $groups] == 0} {
+        lappend groups [ipx::add_file_group -type $template "gpgpu_$role" $core]
+    }
+    if {[llength $groups] != 1} {error "Ambiguous packaged $role file groups: $groups"}
+    set group [lindex $groups 0]
+    set_property model_name $TOP_NAME $group
+    # No project-owned include_dir dependency survives in the delivered package.
+    # All explicit includes resolve to constants.svh beside the packaged RTL.
+    set_property dependency {} $group
     foreach old [ipx::get_files -of_objects $group] {
         ipx::remove_file [get_property name $old] $group
     }

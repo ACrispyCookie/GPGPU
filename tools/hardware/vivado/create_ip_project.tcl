@@ -8,7 +8,30 @@ if {$FLOW_VERSION ne "2025.2" || [version -short] ne "2025.2"} {
 }
 if {$TOP_NAME ne "gpgpu_axi"} {error "Production IP top must be gpgpu_axi"}
 if {[file exists $PROJECT_DIR]} {
-    error "IP project creation requires a fresh directory, refusing: $PROJECT_DIR"
+    # The Python runner creates this directory, its canonical identity marker,
+    # and stage logs before launching Vivado. Existence alone is not a conflict.
+    # Accept only that fresh managed layout; never adopt a saved/reference IP.
+    set identity_file [file join $PROJECT_DIR .gpgpu-managed.json]
+    if {![file isdirectory $PROJECT_DIR] || ![file isfile $identity_file] ||
+        [file type $identity_file] ne "file"} {
+        error "IP creation refuses an unmanaged directory: $PROJECT_DIR"
+    }
+    set identity_channel [open $identity_file r]
+    set identity [string trim [read $identity_channel]]
+    close $identity_channel
+    # Matches prepare_managed_project's sorted schema-1 JSON without requiring
+    # a third-party Tcl JSON package in the vendor interpreter.
+    set expected [format {{"kind": "ip", "part": "%s", "project": "%s", "schema": 1}} $FPGA_PART $PROJECT_NAME]
+    if {$identity ne $expected} {
+        error "IP creation refuses an incompatible managed identity: $PROJECT_DIR"
+    }
+    foreach entry [glob -nocomplain -directory $PROJECT_DIR -tails * .*] {
+        if {$entry in {. .. .gpgpu-managed.json}} {continue}
+        set path [file join $PROJECT_DIR $entry]
+        # .Xil is Vivado's own startup cache, created before the script executes.
+        if {$entry in {.gpgpu .Xil} && [file isdirectory $path] && [file type $path] eq "directory"} {continue}
+        error "IP creation requires fresh managed state; refusing existing entry: $path"
+    }
 }
 # Resolve every required input before creating any project or copying sources.
 set inputs [production_source_paths $RTL_DIR $flow_dir]
@@ -26,10 +49,14 @@ foreach input $inputs {
 }
 add_files -norecurse -fileset sources_1 $sources
 set_property file_type {SystemVerilog Header} [get_files [file join $source_dir constants.svh]]
-set_property is_global_include true [get_files [file join $source_dir constants.svh]]
+# Every macro consumer includes its sibling constants.svh explicitly.
+# Global-include state is not preserved by ipx::package_project.
+set_property is_global_include false [get_files [file join $source_dir constants.svh]]
 set_property file_type {Memory Initialization Files} [get_files [file join $source_dir empty.mem]]
-set_property include_dirs [list $source_dir] [get_filesets sources_1]
-set_property include_dirs [list $source_dir] [get_filesets sim_1]
+# All staged RTL and the header share src/: no development-project include path
+# may be imported as an IP-XACT dependency by the packager.
+set_property include_dirs {} [get_filesets sources_1]
+set_property include_dirs {} [get_filesets sim_1]
 set_property top $TOP_NAME [get_filesets sources_1]
 set_property generic "SP_PER_SM=$NUM_CORES" [get_filesets sources_1]
 # Manual source management retains the explicit interface-first compile order.

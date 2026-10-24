@@ -29,22 +29,40 @@ def _source_files(root):
     return [root / path for path in relative]
 
 
+def _managed_project_identity(name, part, kind):
+    """The versioned marker contract shared by creation and saved-state checks."""
+    return {'project': name, 'part': part, 'kind': kind, 'schema': 1}
+
+
+def _validate_managed_project(directory, name, part, kind):
+    """Read-only ownership preflight; an existing empty directory is not owned."""
+    if directory.is_symlink():
+        raise RuntimeError(f'Refusing symbolic-link project: {directory}')
+    if not directory.exists():
+        return
+    marker = directory / '.gpgpu-managed.json'
+    if not directory.is_dir() or marker.is_symlink() or not marker.is_file():
+        raise RuntimeError(f'Protected/unmanaged project {directory}; use a fresh paths.build.root. No automatic adoption or deletion.')
+    try:
+        identity = json.loads(marker.read_text())
+    except (OSError, ValueError) as exc:
+        raise RuntimeError(f'Invalid managed project marker: {marker}') from exc
+    expected = _managed_project_identity(name, part, kind)
+    if (identity != expected or not isinstance(identity, dict)
+            or type(identity.get('schema')) is not int):
+        raise RuntimeError(f'Incompatible managed project identity: {directory}')
+
+
 def prepare_managed_project(directory, name, part, kind, recreate=False):
     """Never adopt reference/foreign state; retain complete snapshots on recreation."""
     directory = Path(directory)
     marker = directory / '.gpgpu-managed.json'
-    expected = {'project': name, 'part': part, 'kind': kind, 'schema': 1}
-    if directory.is_symlink():
-        raise RuntimeError(f'Refusing symbolic-link project: {directory}')
-    if directory.exists() and any(directory.iterdir()):
-        if not marker.is_file():
-            raise RuntimeError(f'Protected/unmanaged project {directory}; use a fresh paths.build.root. No automatic adoption or deletion.')
-        if json.loads(marker.read_text()) != expected:
-            raise RuntimeError(f'Incompatible managed project identity: {directory}')
-        if recreate:
-            snapshots = directory.parent / '.snapshots'
-            snapshots.mkdir(exist_ok=True)
-            directory.rename(snapshots / f'{name}-{uuid.uuid4().hex}')
+    expected = _managed_project_identity(name, part, kind)
+    _validate_managed_project(directory, name, part, kind)
+    if directory.exists() and recreate:
+        snapshots = directory.parent / '.snapshots'
+        snapshots.mkdir(exist_ok=True)
+        directory.rename(snapshots / f'{name}-{uuid.uuid4().hex}')
     directory.mkdir(parents=True, exist_ok=True)
     if not marker.exists():
         marker.write_text(json.dumps(expected, sort_keys=True) + '\n')
@@ -198,15 +216,7 @@ def package_ip(command, repo, project, ip_repo):
 def saved_current(directory, name, part, bd):
     """Validate saved state even when creation outputs otherwise look up to date."""
     directory = Path(directory)
-    if directory.is_symlink():
-        raise RuntimeError(f'Refusing symlinked project: {directory}')
-    if directory.exists():
-        marker = directory / '.gpgpu-managed.json'
-        if not marker.exists():
-            if any(directory.iterdir()):
-                raise RuntimeError(f'Refusing to adopt unmanaged/reference project: {directory}')
-        elif marker.is_symlink() or json.loads(marker.read_text()) != {'kind': 'system', 'name': name, 'part': part}:
-            raise RuntimeError(f'Existing managed project identity conflicts with config: {directory}')
+    _validate_managed_project(directory, name, part, 'system')
     if Path(bd).exists():
         validate_saved_bd(bd, Path(bd).stem, part)
     return True
@@ -303,7 +313,7 @@ def create_tasks(config):
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
                   'num-cores': cores, 'jobs': jobs, 'repo-root': repo, 'ip-repo-dir': ip_repo,
-                  'axi-base': base, 'axi-range': size, 'version': version}
+                  'axi-base': base, 'axi-range': size, 'flow-version': version}
         return [vendor, '-mode', 'batch', '-source', str(scripts / script), '-tclargs',
                 *(item for key, value in values.items() for item in ('-' + key, str(value)))]
 

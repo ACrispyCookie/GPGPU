@@ -23,16 +23,15 @@ set PRODUCTION_RTL_SOURCES {
 }
 proc production_source_paths {rtl_dir script_dir} {
     global PRODUCTION_RTL_SOURCES
-    set result {}
+    # Put initialization data before HDL, so filesets end in an HDL source.
+    set memory [file join $script_dir ip empty.mem]
+    if {![file isfile $memory]} {error "Required memory initialization missing: $memory"}
+    set result [list [file normalize $memory]]
     foreach relative $PRODUCTION_RTL_SOURCES {
         set path [file normalize [file join $rtl_dir $relative]]
         if {![file isfile $path]} {error "Required production source missing: $path"}
         lappend result $path
     }
-    # Tracked zero initialization image: both memories are 2048 32-bit words.
     # Keep the basename empty.mem: RTL's default $readmemh names this file.
-    set memory [file join $script_dir ip empty.mem]
-    if {![file isfile $memory]} {error "Required memory initialization missing: $memory"}
-    lappend result [file normalize $memory]
     return $result
 }

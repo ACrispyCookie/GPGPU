@@ -1,3 +1,5 @@
+`include "constants.svh"
+
 module Regfile  #(
     parameter CORE_ID = 0
 )(

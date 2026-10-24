@@ -55,12 +55,88 @@ def validate_package(path: str | Path) -> None:
                     for p in match.group(1).split()}
     source_files['empty.mem'] = FLOW / 'ip/empty.mem'
     expected = set(source_files)
-    # Metadata can hide include/GUI/tool paths outside fileset declarations.
-    absolute = re.compile(r'(?:^|[\s=\";{])(?:/[^/\s]|[A-Za-z]:[\\/]|\.\./)')
+    constant_macros = set(re.findall(r'^`define\s+(\w+)', source_files['constants.svh'].read_text(), re.M))
+    # Only filesystem-bearing fields are paths: taxonomy, descriptions, VLNVs
+    # and parameter identifiers can legitimately start with '/' or contain '..'.
+    def local_name(tag):
+        return re.sub(r'[^a-z0-9]', '', tag.rsplit('}', 1)[-1].lower())
+
+    def path_field(tag):
+        return local_name(tag).endswith(('path', 'paths', 'dir', 'dirs',
+                                         'directory', 'directories', 'filename'))
+
+    def metadata_path(value, *, directory=False):
+        relative = PurePosixPath(value)
+        require(value and not relative.is_absolute() and '..' not in relative.parts and
+                '\\' not in value and ':' not in value,
+                f'Nonportable metadata path: {value}')
+        target = root / value
+        require(target.resolve().is_relative_to(root) and
+                (target.is_dir() if directory else target.exists()),
+                f'Missing or escaping metadata path: {value}')
+
+    # Vivado directory lists may be Tcl-braced/quoted or semicolon-separated.
+    # Do not use shell unescaping: it would hide Windows path separators.
+    path_items = re.compile(r'\{([^{}]*)\}|"([^"\n]*)"|\'([^\'\n]*)\'|([^\s;{}"\']+)')
+
+    def metadata_field(tag, value):
+        directory = local_name(tag).endswith(('dir', 'dirs', 'directory', 'directories'))
+        for item in path_items.finditer(value):
+            metadata_path(next(v for v in item.groups() if v is not None), directory=directory)
+        require(not path_items.sub('', value).strip(' ;'), f'Invalid metadata path list: {value}')
+
     for element in component.iter():
-        for value in [element.text or '', *element.attrib.values()]:
-            require(not absolute.search(value), f'External path in component metadata: {value}')
+        if path_field(element.tag):
+            metadata_field(element.tag, element.text or '')
+            if 'value' in element.attrib:
+                metadata_field(element.tag, element.attrib['value'])
+        for key, value in element.attrib.items():
+            if path_field(key):
+                metadata_field(key, value)
+        # Also handle named vendor parameters/options such as PROJECT_PATH.
+        field = text(element, 'name') or element.get('name', '')
+        if field and path_field(field):
+            value = element.find('s:value', N)
+            if value is not None:
+                metadata_field(field, value.text or '')
+            elif 'value' in element.attrib:
+                metadata_field(field, element.attrib['value'])
+
+    # File-group dependencies are expressions, not plain directory lists. Inspect
+    # their literals/path tokens without executing them or treating arithmetic '/'
+    # and PARAM_VALUE identifiers as filesystem references.
+    dependency_tokens = re.compile(r'"([^"\n]*)"|\'([^\'\n]*)\'|([^\s()\[\]{},;=<>!+*"\']+)')
+    for group in component.findall('s:fileSets/s:fileSet', N):
+        for element in group.iter():
+            values = [v for k, v in element.attrib.items() if local_name(k) == 'dependency']
+            if local_name(element.tag) == 'dependency':
+                values.append(''.join(element.itertext()))
+            for expression in values:
+                for token in dependency_tokens.finditer(expression):
+                    value = next(v for v in token.groups() if v is not None)
+                    quoted = token.group(3) is None
+                    file_argument = re.search(r'(?:file_exists|fileexists|directory_exists|direxists)\s*\(\s*$',
+                                              expression[:token.start()], re.I)
+                    if (file_argument or value == '..' or
+                            (value != '/' or quoted or expression.strip() == '/') and
+                            ('/' in value or '\\' in value or re.match(r'^[A-Za-z]:', value))):
+                        metadata_path(value)
     filesets = named(component, 's:fileSets/s:fileSet')
+    # IP-XACT view references carry the HDL role; fileset names are arbitrary.
+    hdl_groups = {}
+    for view in named(component, 's:model/s:views/s:view').values():
+        environment = text(view, 'envIdentifier')
+        for role in ('synthesis', 'simulation'):
+            language, separator, use = environment.partition(':vivado.xilinx.com:')
+            if separator and use == role and language in ('', 'verilogSource', 'systemVerilogSource', 'vhdlSource'):
+                refs = view.findall('s:fileSetRef/s:localName', N)
+                require(role not in hdl_groups and len(refs) == 1,
+                        f'Ambiguous {role} file group')
+                group = (refs[0].text or '').strip()
+                require(group in filesets, f'Missing {role} fileset: {group}')
+                hdl_groups[role] = group
+    require(set(hdl_groups) == {'synthesis', 'simulation'}, 'Missing synthesis/simulation views')
+    require(len(set(hdl_groups.values())) == 2, 'Synthesis/simulation file groups must be distinct')
     all_files = []
     for group in filesets.values():
         entries = group.findall('s:file', N)
@@ -78,6 +154,17 @@ def validate_package(path: str | Path) -> None:
             if relative.name in source_files:
                 require(file.read_bytes() == source_files[relative.name].read_bytes(),
                         f'Packaged source differs from the current production input: {name}')
+            if relative.suffix == '.sv':
+                source = file.read_text()
+                uses = [m.start() for m in re.finditer(r'`(\w+)', source) if m.group(1) in constant_macros]
+                if uses:
+                    include = re.search(r'^\s*`include\s+"constants\.svh"', source, re.M)
+                    require(include is not None and include.start() < min(uses),
+                            f'Macro consumer needs explicit constants.svh before use: {name}')
+                    header_path = file.with_name('constants.svh')
+                    require(header_path.is_file() and header_path.resolve().is_relative_to(root) and
+                            header_path.read_bytes() == source_files['constants.svh'].read_bytes(),
+                            f'constants.svh is not a portable sibling of: {name}')
             if relative.name == 'empty.mem':
                 require('mif' in [e.text for e in entry.findall('s:userFileType', N)], f'Wrong memory initialization type: {name}')
             else:
@@ -85,14 +172,17 @@ def validate_package(path: str | Path) -> None:
                 require(text(entry, 'fileType') == kind, f'Wrong file type: {name}')
             all_files.append((name, entry))
         group_name = text(group, 'name')
-        if group_name in ('xilinx_anylanguagesynthesis_view_fileset','xilinx_anylanguagebehavioralsimulation_view_fileset'):
+        if group_name in hdl_groups.values():
             require({PurePosixPath(name).name for name in seen} == expected, f'Incomplete production fileset: {group_name}')
             ordered = [PurePosixPath(text(e, 'name')).name for e in entries]
-            require(ordered[:2] == ['constants.svh', 'MemoryInterface.sv'], f'Interface/header compile order: {group_name}')
+            require(ordered[:3] == ['empty.mem', 'constants.svh', 'MemoryInterface.sv'],
+                    f'Memory/interface/header compile order: {group_name}')
+            require(text(entries[-1], 'fileType') == 'systemVerilogSource' and
+                    text(entries[-1], 'isIncludeFile') not in ('true', '1'),
+                    f'Last fileset entry must be HDL: {group_name}')
             header = next(e for e in entries if PurePosixPath(text(e,'name')).name == 'constants.svh')
             require(text(header,'isIncludeFile') in ('true','1'), f'constants.svh is not an include in {group_name}')
-    for group in ('xilinx_anylanguagesynthesis_view_fileset','xilinx_anylanguagebehavioralsimulation_view_fileset','xilinx_xpgui_view_fileset'):
-        require(group in filesets, f'Missing fileset: {group}')
+    require('xilinx_xpgui_view_fileset' in filesets, 'Missing XGUI fileset')
     require(any(n == 'xgui/gpgpu_axi_v1_0.tcl' for n, _ in all_files), 'Missing XGUI')
     users = named(component, 's:parameters/s:parameter')
     models = named(component, 's:model/s:modelParameters/s:modelParameter')

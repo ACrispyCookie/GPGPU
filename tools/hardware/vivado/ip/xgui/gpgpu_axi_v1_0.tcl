@@ -6,7 +6,10 @@ proc init_gui {IPINST} {
 }
 proc validate_PARAM_VALUE.SP_PER_SM {PARAM_VALUE.SP_PER_SM} {
     set value [get_property value ${PARAM_VALUE.SP_PER_SM}]
-    return [expr {[string is integer -strict $value] && $value > 0}]
+    if {[string is integer -strict $value] && $value > 0} {
+        return true
+    }
+    return false
 }
 proc update_PARAM_VALUE.SP_PER_SM {PARAM_VALUE.SP_PER_SM} {}
 proc update_MODELPARAM_VALUE.SP_PER_SM {MODELPARAM_VALUE.SP_PER_SM PARAM_VALUE.SP_PER_SM} {

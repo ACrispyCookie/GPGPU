@@ -32,7 +32,7 @@ def test_configured_vendor_and_arguments_in_all_commands(tmp_path):
         assert command[command.index('-num-cores') + 1] == '4'
         assert command[command.index('-jobs') + 1] == '2'
         assert command[command.index('-rtl-dir') + 1] == str(ROOT / 'hardware/rtl/gpgpu')
-        assert command[command.index('-version') + 1] == '2025.2'
+        assert command[command.index('-flow-version') + 1] == '2025.2'
         assert Path(command[command.index('-source') + 1]).is_file()
         assert str(tmp_path / 'output') in command[command.index('-project-dir') + 1]
         assert not any('/GPU/' in dep for dep in task['file_dep'])
