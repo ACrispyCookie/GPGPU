@@ -111,11 +111,13 @@ module GPGPU #(
         .o_imem_addr(core_imem_addr),
         .o_imem_ren(core_imem_ren),
 
-        .memory(mem_if.master),
+        .memory_bus(memory_bus.requester),
         .i_stall(stall),
 
         .o_kernel_complete(core_complete)
     );
+
+    //! Instruction memory (BRAM)
 
     MemoryInterface #(
         .ADDR_WIDTH($clog2(`IMEM_ENTRIES))
@@ -130,16 +132,20 @@ module GPGPU #(
         .memory(imem_if.slave)
     );
 
-    MemoryController #(
-        .SP_PER_SM(SP_PER_SM)
-    ) memory_controller (
-        .memory(mem_if.slave),
-        .o_stall(stall)
-    );
+    //! Data memory (BRAM + DRAM)
 
-    MemoryInterface #(
-        .ADDR_WIDTH(32),
-        .DATA_WIDTH(32)
-    ) mem_if [SP_PER_SM] ();
+    MemorySubsystemInterface #(
+        .N(SP_PER_SM)
+    ) memory_bus();
+
+    DataMemorySubsystem #(
+        .N(SP_PER_SM)
+    ) data_memory_subsystem (
+        .clk(clk),
+        .rst_n(rst_n),
+        .abort(1'b0),
+        .idle(),
+        .mem(memory_bus)
+    );
 
 endmodule

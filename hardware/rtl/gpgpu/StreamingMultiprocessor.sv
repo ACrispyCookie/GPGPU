@@ -11,7 +11,7 @@ module StreamingMultiprocessor #(
     output [`IMEM_AW-1:0] o_imem_addr,
     output o_imem_ren,
 
-    MemoryInterface.master memory [NUM_CORES],
+    MemorySubsystemInterface.requester memory_bus,
     input i_stall,
 
     output o_kernel_complete
@@ -237,7 +237,7 @@ module StreamingMultiprocessor #(
                 .o_mul3_rd(core_mul3_rd[i]),
 
                 //! Memory
-                .memory(memory[i]),
+                .memory(memory_bus[i]),
 
                 //! Control Pins
                 .i_stall(stall),

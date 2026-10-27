@@ -35,7 +35,7 @@ module StreamingProcessor #(
     output [4:0] o_mul3_rd,
 
     //! Memory
-    MemoryInterface.master memory,
+    MemorySubsystemInterface.requester memory,
 
     //! Control
     input i_stall,
@@ -236,6 +236,9 @@ module StreamingProcessor #(
     assign memory.ren = mem_is_load | mem_is_store;
     assign memory.wen = mem_is_store;
     assign memory.wdata = exmem_reg_b;
+
+    assign memory.req
+
     assign o_core_complete = exmem_core_complete;
 
     //! =========================================================================
