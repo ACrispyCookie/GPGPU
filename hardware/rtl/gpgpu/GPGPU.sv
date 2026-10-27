@@ -19,20 +19,20 @@ module GPGPU
     input logic i_req_write,
     input word_t i_req_addr,
     input word_t i_req_wdata,
-    input logic [3:0] i_req_wstrb,
+    input strb_t i_req_wstrb,
 
     // Response signals
     output logic o_rsp_valid,
     input logic i_rsp_ready,
     output word_t o_rsp_rdata,
-    output logic [2:0] o_rsp_status,
+    output rsp_status_t o_rsp_status,
 
     output logic o_irq
 );
     // tdb was here...
 
     // Control for the core
-    logic [1:0] core_state;
+    core_state_t core_state;
     logic core_complete, complete_pulse, stopped;
     logic control_start, control_stop, clear_stopped;
     logic core_reset;
@@ -43,7 +43,7 @@ module GPGPU
     // CSR access description/commit. Register actions go directly to State.
     logic csr_write_fire;
     word_t csr_rdata;
-    logic [2:0] csr_status;
+    rsp_status_t csr_status;
 
     // Host memory path bypasses the CSR bank.
     MemoryInterface #(.ADDR_WIDTH(IMEM_AW)) host_imem ();
@@ -65,13 +65,13 @@ module GPGPU
 
     assign dmem_if_b.addr = core_dmem_b.addr;
     assign dmem_if_b.wdata = core_dmem_b.wdata;
-    assign dmem_if_b.ren = o_core_running ? core_dmem_b.ren : 1'b0;
-    assign dmem_if_b.wen = o_core_running ? core_dmem_b.wen : 1'b0;
+    assign dmem_if_b.ren = o_core_running ? core_dmem_b.ren : '0;
+    assign dmem_if_b.wen = o_core_running ? core_dmem_b.wen : '0;
 
     assign imem_if.addr = o_core_running ? core_imem_addr : host_imem.addr;
     assign imem_if.wdata = host_imem.wdata;
     assign imem_if.ren = o_core_running ? core_imem_ren : host_imem.ren;
-    assign imem_if.wen = o_core_running ? 1'b0 : host_imem.wen;
+    assign imem_if.wen = o_core_running ? '0 : host_imem.wen;
     assign host_imem.rdata = imem_if.rdata;
 
     MMIOController mmio (

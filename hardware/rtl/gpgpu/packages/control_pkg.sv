@@ -1,22 +1,39 @@
 package control_pkg;
 
     //! CSR addresses (Basically commands to GPU)
-    localparam logic [31:0] REG_INFO = 32'h0000;
-    localparam logic [31:0] REG_CONTROL = 32'h0004;
-    localparam logic [31:0] REG_STATUS = 32'h0008;
-    localparam logic [31:0] REG_IRQ_ENABLE = 32'h000C;
-    localparam logic [31:0] REG_IRQ_STATUS = 32'h0010;
-    localparam logic [31:0] IMEM_BASE = 32'h2000;
-    localparam logic [31:0] DMEM_BASE = 32'h4000;
+    localparam logic [gpu_pkg::XLEN-1:0] REG_INFO = gpu_pkg::XLEN'('h0000);
+    localparam logic [gpu_pkg::XLEN-1:0] REG_CONTROL = gpu_pkg::XLEN'('h0004);
+    localparam logic [gpu_pkg::XLEN-1:0] REG_STATUS = gpu_pkg::XLEN'('h0008);
+    localparam logic [gpu_pkg::XLEN-1:0] REG_IRQ_ENABLE = gpu_pkg::XLEN'('h000C);
+    localparam logic [gpu_pkg::XLEN-1:0] REG_IRQ_STATUS = gpu_pkg::XLEN'('h0010);
 
-    //! CSR addresses (start/stop to GPU)
-    localparam logic [31:0] CONTROL_START_MASK = 32'h00000001;
-    localparam logic [31:0] CONTROL_STOP_MASK = 32'h00000002;
+    //! Control bits (start/stop GPU)
+    localparam int unsigned CONTROL_START_BIT = 0;
+    localparam int unsigned CONTROL_STOP_BIT = 1;
 
-    //! GPU state
-    localparam logic [31:0] STATUS_IDLE_MASK = 32'h00000001;
-    localparam logic [31:0] STATUS_RUNNING_MASK = 32'h00000002;
-    localparam logic [31:0] STATUS_STOPPED_MASK = 32'h00000004;
+    //! GPU state bits
+    localparam int unsigned STATUS_IDLE_BIT = 0;
+    localparam int unsigned STATUS_RUNNING_BIT = 1;
+    localparam int unsigned STATUS_STOPPED_BIT = 2;
+
+    //! GPU interrupt bits
+    localparam int unsigned IRQ_COMPLETE_BIT = 0;
+
+    //! Derive masks from bit positions
+    localparam logic [gpu_pkg::XLEN-1:0] CONTROL_START_MASK =
+        gpu_pkg::XLEN'(1) << CONTROL_START_BIT;
+
+    localparam logic [gpu_pkg::XLEN-1:0] CONTROL_STOP_MASK =
+        gpu_pkg::XLEN'(1) << CONTROL_STOP_BIT;
+
+    localparam logic [gpu_pkg::XLEN-1:0] STATUS_IDLE_MASK =
+        gpu_pkg::XLEN'(1) << STATUS_IDLE_BIT;
+
+    localparam logic [gpu_pkg::XLEN-1:0] STATUS_RUNNING_MASK =
+        gpu_pkg::XLEN'(1) << STATUS_RUNNING_BIT;
+
+    localparam logic [gpu_pkg::XLEN-1:0] STATUS_STOPPED_MASK =
+        gpu_pkg::XLEN'(1) << STATUS_STOPPED_BIT;
 
     typedef enum logic [1:0] {
         CORE_IDLE = 2'b00,

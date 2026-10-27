@@ -148,7 +148,7 @@ module tb_GPGPU_smx_only ();
              * to the SMX and makes o_running reflect running state.
              */
             @(negedge UUT.clk);
-            force UUT.state.current_state = UUT.state.RUNNING;
+            force UUT.core_state = control_pkg::CORE_RUNNING;
 
             cycle_count = 0;
 
@@ -171,7 +171,7 @@ module tb_GPGPU_smx_only ();
             $fclose(fd_trace);
             // Do not change the forced run state in the active writeback edge.
             @(negedge uut_clk);
-            force UUT.state.current_state = UUT.state.IDLE;
+            force UUT.core_state = control_pkg::CORE_IDLE;
 
             if (cycle_count >= `TEST_TIMEOUT_CYCLES) begin
                 $fatal(1, "Test %0d reached timeout of %0d cycles!",
