@@ -8,6 +8,7 @@ import re
 import subprocess
 import sys
 import time
+import traceback
 from datetime import datetime
 from pathlib import Path
 from threading import Lock, Thread
@@ -203,6 +204,8 @@ class RunLogReporter(ConsoleReporter):
         self._started_at: dict[str, float] = {}
         self._capture: _FdTee | None = None
         self._active_task: str | None = None
+        self._selected_task: Task | None = None
+        self._task_order: dict[str, int] = {}
         self._monitor_requested = monitor
         self._dashboard: BuildDashboard | None = None
         self._write_metadata()
@@ -245,6 +248,7 @@ class RunLogReporter(ConsoleReporter):
             # requested action; include them in the same ordered stage plan.
             for dependency in (*task.task_dep, *task.setup_tasks):
                 visit(dependency)
+            self._task_order[task.name] = len(self._task_order)
             if task.actions:
                 planned.append(task)
 
@@ -265,7 +269,16 @@ class RunLogReporter(ConsoleReporter):
             self._dashboard = BuildDashboard(self.run_dir, self._dashboard_failed)
             self._dashboard.start()
 
+    def get_status(self, task: Task) -> None:
+        # pydoit calls this BEFORE dependency/uptodate callbacks, not just
+        # before actions. Keep selection separate from the active output tee.
+        self._selected_task = task
+        super().get_status(task)
+
     def execute_task(self, task: Task) -> None:
+        # Setup tasks can cause a task to be selected twice; pydoit omits
+        # get_status on that second selection.
+        self._selected_task = task
         task_info = self._task_records.get(task.name)
         if task_info is None:
             super().execute_task(task)
@@ -287,46 +300,118 @@ class RunLogReporter(ConsoleReporter):
 
     def add_success(self, task: Task) -> None:
         self._finish_task(task, "success")
+        self._selected_task = None
         super().add_success(task)
 
     def add_failure(self, task: Task, fail: object) -> None:
-        task_info = self._task_records.get(task.name)
+        task_info = self._failure_task_info(task)
         if task_info is not None:
             task_info["record"]["exit_code"] = _failure_exit_code(fail)
             message = getattr(fail, "get_msg", lambda: str(fail))()
             task_info["record"]["error"] = message
             # Emit the runner exception before closing the task's live tee.
             # Vendor output may indicate success even when artifact validation fails.
-            print(f"ERROR: {message}", flush=True)
+            if self._active_task == task.name:
+                print(f"ERROR: {message}", flush=True)
+            else:
+                self.write(f"ERROR: {message}\n")
+            if self._active_task != task.name:
+                task_info["record"]["log"] = task_info["log_name"]
+                with (self.run_dir / task_info["log_name"]).open("a", encoding="utf-8") as log:
+                    log.write(f"ERROR: {message}\n")
         self._finish_task(task, "failed")
+        self._selected_task = None
         super().add_failure(task, fail)  # type: ignore[arg-type]
 
     def runtime_error(self, msg: str) -> None:
         # ConsoleReporter's final summary is hidden while Live is active. Keep
         # runner errors in the same JSON source as the rest of the dashboard.
         super().runtime_error(msg)
-        self.metadata["error"] = "\n".join(str(error) for error in self.runtime_errors)
+        exception = sys.exc_info()[1]
+        detail = "".join(traceback.format_exception(exception)) if exception is not None else msg
+        self._record_runtime_error(detail, exit_code=2)
+
+    def _failure_task_info(self, task: Task) -> dict[str, Any]:
+        if task.name not in self._task_records:
+            # Successful dependency-only aggregates remain absent from the
+            # stage plan; a failed aggregate must still be attributable.
+            record = {"task": task.name, "status": "not_run"}
+            order = self._task_order.get(task.name, len(self._task_order))
+            index = next((i for i, item in enumerate(self.metadata["tasks"])
+                          if self._task_order.get(item["task"], order) > order),
+                         len(self.metadata["tasks"]))
+            self.metadata["tasks"].insert(index, record)
+            self._task_records[task.name] = {
+                "record": record, "log_name": f"diagnostic-{_slug(task.name)}.log"
+            }
+        return self._task_records[task.name]
+
+    def _record_runtime_error(self, message: str, *, exit_code: int) -> None:
+        task = self._selected_task
+        heading = f"ERROR: task '{task.name}'" if task is not None else "ERROR: runner"
+        diagnostic = f"{heading}\n{message.rstrip()}\n"
+        with (self.run_dir / "diagnostics.log").open("a", encoding="utf-8") as log:
+            log.write(diagnostic)
+        self.metadata["error"] = "\n".join(filter(None, (self.metadata.get("error"), message.rstrip())))
+        self.metadata["diagnostics_log"] = "diagnostics.log"
+        if task is not None:
+            info = self._failure_task_info(task)
+            record = info["record"]
+            # Never transfer an error to an already completed prerequisite.
+            if record["status"] in ("not_run", "running"):
+                record.update(error=message.rstrip(), exit_code=exit_code, log=info["log_name"])
+                if self._active_task == task.name and self._capture is not None:
+                    self._capture.write_text(diagnostic)
+                else:
+                    with (self.run_dir / info["log_name"]).open("a", encoding="utf-8") as log:
+                        log.write(diagnostic)
+                self._finish_task(task, "failed")
+        self._selected_task = None
         self._write_metadata()
 
+    def complete_run(self) -> None:
+        # Runner.run_all calls finish() in its finally block. Unhandled
+        # callback exceptions bypass both add_failure and runtime_error, but
+        # their traceback is still available here before DoitMain returns 3.
+        exception = sys.exc_info()[1]
+        if isinstance(exception, Exception):
+            trace = exception.__traceback__
+            while trace is not None:
+                runner = trace.tb_frame.f_locals.get("self")
+                if trace.tb_frame.f_code.co_name == "run_all" and getattr(runner, "reporter", None) is self:
+                    self._record_runtime_error("".join(traceback.format_exception(exception)), exit_code=3)
+                    break
+                trace = trace.tb_next
+        # DoitMain owns console tracebacks for uncaught exceptions; normal
+        # runtime_error messages use ConsoleReporter (or dashboard JSON).
+        super().complete_run()
+
     def skip_uptodate(self, task: Task) -> None:
+        self._selected_task = None
         task_info = self._task_records.get(task.name)
         if task_info is not None:
             task_info["record"]["status"] = "up_to_date"
             self._write_metadata()
         super().skip_uptodate(task)
 
+    def skip_ignore(self, task: Task) -> None:
+        self._selected_task = None
+        super().skip_ignore(task)
+
     def _finish_task(self, task: Task, status: str) -> None:
         task_info = self._task_records.get(task.name)
         if task_info is None:
             return
-        duration = round(time.perf_counter() - self._started_at[task.name], 3)
+        started = self._started_at.get(task.name)
+        duration = round(time.perf_counter() - started, 3) if started is not None else None
         if self._capture is not None and self._active_task == task.name:
             self._capture.stop()
             self._capture = None
             self._active_task = None
         record = task_info["record"]
         record["status"] = status
-        record["duration_s"] = duration
+        if duration is not None:
+            record["duration_s"] = duration
         self._write_metadata()
 
     def finalize(self, exit_code: int) -> None:

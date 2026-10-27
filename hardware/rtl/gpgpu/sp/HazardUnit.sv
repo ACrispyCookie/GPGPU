@@ -1,3 +1,5 @@
+`include "constants.svh"
+
 module HazardUnit (
     input [4:0] i_id_rs1,
     input [4:0] i_id_rs2,
