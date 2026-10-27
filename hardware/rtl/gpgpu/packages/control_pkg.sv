@@ -6,6 +6,8 @@ package control_pkg;
     localparam logic [gpu_pkg::XLEN-1:0] REG_STATUS = gpu_pkg::XLEN'('h0008);
     localparam logic [gpu_pkg::XLEN-1:0] REG_IRQ_ENABLE = gpu_pkg::XLEN'('h000C);
     localparam logic [gpu_pkg::XLEN-1:0] REG_IRQ_STATUS = gpu_pkg::XLEN'('h0010);
+    localparam logic [gpu_pkg::XLEN-1:0] IMEM_BASE = 'h2000;
+    localparam logic [gpu_pkg::XLEN-1:0] DMEM_BASE = 'h4000;
 
     //! Control bits (start/stop GPU)
     localparam int unsigned CONTROL_START_BIT = 0;

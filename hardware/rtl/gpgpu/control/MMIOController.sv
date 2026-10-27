@@ -113,24 +113,19 @@ module MMIOController
         end else if (imem_selected || dmem_selected) begin
             if (!i_idle) begin
                 decoded_status = RSP_INVALID_STATE;
-
             end else if (
                 i_req_write &&
                 i_req_wstrb != '1 &&
                 i_req_wstrb != '0
             ) begin
                 decoded_status = RSP_INVALID_REQUEST;
-
             end else begin
                 // A zero-strobe memory write is an acknowledged no-op.
-                decoded_memory =
-                    !i_req_write || (i_req_wstrb != '0);
+                decoded_memory = !i_req_write || (i_req_wstrb != '0);
             end
-
         end else if (csr_selected) begin
             decoded_rdata = i_csr_rdata;
             decoded_status = i_csr_status;
-
         end else begin
             decoded_status = RSP_INVALID_ADDRESS;
         end
@@ -175,15 +170,13 @@ module MMIOController
             memory_wdata <= i_req_wdata;
 
             memory_address <= HOST_ADDR_WIDTH'(
-                (i_req_addr -
-                    (imem_selected ? IMEM_BASE : DMEM_BASE)) >> 2
+                (i_req_addr - (imem_selected ? IMEM_BASE : DMEM_BASE)) >> 2
             );
         end
     end
 
     // Drive the selected synchronous BRAM port.
-    wire memory_access =
-        current_state == ACCESS_MEMORY && i_idle;
+    wire memory_access = current_state == ACCESS_MEMORY && i_idle;
 
     assign imem.addr = memory_address[IMEM_AW-1:0];
     assign imem.wdata = memory_wdata;

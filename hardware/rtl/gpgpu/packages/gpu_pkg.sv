@@ -8,8 +8,6 @@ package gpu_pkg;
     localparam int unsigned REG_ADDR_W = $clog2(REG_COUNT);
     localparam int unsigned IMEM_AW = $clog2(IMEM_ENTRIES);
     localparam int unsigned DMEM_AW = $clog2(DMEM_ENTRIES);
-    localparam int unsigned IMEM_BASE = 2000;
-    localparam int unsigned DMEM_BASE = 4000;
 
     localparam logic [XLEN-1:0] INITIAL_PC = 32'h0000_0000;
     localparam logic [XLEN-1:0] NOP_INSTR = 32'h0000_0013;
