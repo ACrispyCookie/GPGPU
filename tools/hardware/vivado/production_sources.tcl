@@ -16,10 +16,15 @@ set PRODUCTION_RTL_SOURCES {
     control/CSRBank.sv
     control/ExecutionController.sv
     control/MMIOController.sv
+    packages/alu_pkg.sv
+    packages/control_pkg.sv
+    packages/gpu_pkg.sv
+    packages/pipeline_pkg.sv
+    packages/riscv_pkg.sv
     StreamingMultiprocessor.sv
     GPGPU.sv
     interfaces/AXI4LiteSlave.sv
-    interfaces/AXI4LiteTop.sv
+    interfaces/AXI4LiteTop.v
 }
 proc production_source_paths {rtl_dir script_dir} {
     global PRODUCTION_RTL_SOURCES

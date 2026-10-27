@@ -37,7 +37,7 @@ def test_manifest_is_explicit_production_and_required_inputs_exist():
     assert Path(paths[0]).name == 'empty.mem'
     assert Path(paths[1]).name == 'constants.svh'
     assert Path(paths[2]).name == 'MemoryInterface.sv'
-    assert Path(paths[-1]).name == 'AXI4LiteTop.sv'
+    assert Path(paths[-1]).name == 'AXI4LiteTop.v'
     assert all(Path(p).is_file() for p in paths)
     assert not any('experimental' in p or '/tb/' in p or 'HostControllerProcessor' in p or p.endswith('.xdc') for p in paths)
     assert len(paths) == len(set(paths)) == 20
@@ -134,7 +134,7 @@ def test_package_validation_fails_closed(tmp_path, mutation):
                      if f.findtext('s:name', namespaces=ns).endswith('HazardUnit.sv'))
         entry.find('s:name', ns).text = 'nested/HazardUnit.sv'
     elif mutation=='missing_memory': (root/'src/empty.mem').unlink()
-    elif mutation=='missing_source': (root/'src/AXI4LiteTop.sv').unlink()
+    elif mutation=='missing_source': (root/'src/AXI4LiteTop.v').unlink()
     elif mutation=='external_metadata':
         extension=ET.SubElement(r,q('vendorExtensions'));ET.SubElement(extension,'projectPath').text='/external/project'
     elif mutation=='external_include':
@@ -318,7 +318,7 @@ def test_ip_package_driver_configures_contract_without_reference_opens(tmp_path,
     for group in {a[-1] for n, a in calls if n == 'ipx::add_file'}:
         ordered = [Path(a[0]).name for n, a in calls if n == 'ipx::add_file' and a[-1] == group]
         assert ordered[:3] == ['empty.mem', 'constants.svh', 'MemoryInterface.sv']
-        assert ordered[-1] == 'AXI4LiteTop.sv'
+        assert ordered[-1] == 'AXI4LiteTop.v'
     package_index = next(i for i, (n, _) in enumerate(calls) if n == 'ipx::package_project')
     before = calls[:package_index]
     assert any(n == 'set_property' and a[:2] == ('is_global_include', 'false') for n, a in before)

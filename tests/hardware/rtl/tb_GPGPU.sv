@@ -4,7 +4,10 @@
 `define CLOCK_PERIOD 10
 `define TEST_TIMEOUT_CYCLES 1500
 
-module tb_GPGPU_smx_only ();
+module tb_GPGPU_smx_only 
+    import control_pkg::*;
+    import gpu_pkg::*;
+();
 
     parameter NUM_CORES = 32;
 
@@ -13,7 +16,7 @@ module tb_GPGPU_smx_only ();
     wire o_idle;
     wire o_running;
 
-    reg [31:0] expected_data [0:`DMEM_ENTRIES-1];
+    reg [31:0] expected_data [0:DMEM_ENTRIES-1];
     reg [31:0] expected_regfile [0:NUM_CORES-1][0:31];
     reg [31:0] temp_regfile [0:31];
 
@@ -33,13 +36,14 @@ module tb_GPGPU_smx_only ();
 
     GPGPU #(.SP_PER_SM(NUM_CORES), .MEMORY_INIT("")) UUT (
         .clk(clk_in), .rst_n(rst),
+        .o_core_idle(), .o_core_running(),
         .i_req_valid(1'b0), .o_req_ready(), .i_req_write(1'b0),
         .i_req_addr(32'b0), .i_req_wdata(32'b0), .i_req_wstrb(4'b0),
         .o_rsp_valid(), .i_rsp_ready(1'b1), .o_rsp_rdata(),
         .o_rsp_status(), .o_irq()
     );
-    assign o_idle = rst && UUT.core_state == `CORE_IDLE;
-    assign o_running = rst && UUT.core_state == `CORE_RUNNING;
+    assign o_idle = rst && UUT.core_state == CORE_IDLE;
+    assign o_running = rst && UUT.core_state == CORE_RUNNING;
 
     wire uut_clk = clk_in;
 
@@ -102,7 +106,7 @@ module tb_GPGPU_smx_only ();
             $display("\n[INFO] ---> Starting test %0d...", test_idx);
 
             // Clear expected arrays
-            for (i = 0; i < `DMEM_ENTRIES; i = i + 1)
+            for (i = 0; i < DMEM_ENTRIES; i = i + 1)
                 expected_data[i] = 32'b0;
 
             for (c = 0; c < NUM_CORES; c = c + 1)
@@ -110,10 +114,10 @@ module tb_GPGPU_smx_only ();
                     expected_regfile[c][i] = 32'b0;
 
             // Clear DUT memories directly
-            for (i = 0; i < `IMEM_ENTRIES; i = i + 1)
+            for (i = 0; i < IMEM_ENTRIES; i = i + 1)
                 UUT.instructionMemory.data[i] = 32'b0;
 
-            for (i = 0; i < `DMEM_ENTRIES; i = i + 1)
+            for (i = 0; i < DMEM_ENTRIES; i = i + 1)
                 UUT.dataMemory.data[i] = 32'b0;
 
             // Load IMEM directly, like old SMX test
@@ -147,7 +151,7 @@ module tb_GPGPU_smx_only ();
              * to the SMX and makes o_running reflect running state.
              */
             @(negedge UUT.clk);
-            force UUT.state.current_state = UUT.state.RUNNING;
+            force UUT.core_state = control_pkg::CORE_RUNNING;
 
             cycle_count = 0;
 
@@ -161,16 +165,16 @@ module tb_GPGPU_smx_only ();
                     cycle_count,
                     UUT.smx.program_counter,
                     UUT.smx.ifid_program_counter,
-                    UUT.smx.idex_program_counter,
-                    UUT.smx.cores[0].core.exmem_program_counter,
-                    UUT.smx.cores[0].core.memwb_program_counter
+                    UUT.smx.idex.program_counter,
+                    UUT.smx.cores[0].core.exmem.program_counter,
+                    UUT.smx.cores[0].core.memwb.program_counter
                 );
             end
 
             $fclose(fd_trace);
             // Do not change the forced run state in the active writeback edge.
             @(negedge uut_clk);
-            force UUT.state.current_state = UUT.state.IDLE;
+            force UUT.core_state = control_pkg::CORE_IDLE;
 
             if (cycle_count >= `TEST_TIMEOUT_CYCLES) begin
                 $fatal(1, "Test %0d reached timeout of %0d cycles!",
@@ -206,7 +210,7 @@ module tb_GPGPU_smx_only ();
             // Compare DMEM directly
             data_errors = 0;
 
-            for (i = 0; i < `DMEM_ENTRIES; i = i + 1) begin
+            for (i = 0; i < DMEM_ENTRIES; i = i + 1) begin
                 if (UUT.dataMemory.data[i] !== expected_data[i]) begin
                     $display("  [ERROR] Data memory Address %0d: Expected %h, Found %h",
                              i, expected_data[i], UUT.dataMemory.data[i]);
