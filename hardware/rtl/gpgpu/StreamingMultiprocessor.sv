@@ -244,7 +244,7 @@ module StreamingMultiprocessor #(
                 //! Memory
                 .memory(memory_bus[i]),
                 .mem_response_received(mem_response_received[i]),
-                .mem_is_mem(mem_is_mem_vec[i])
+                .mem_is_mem(mem_is_mem_vec[i]),
 
                 //! Control Pins
                 .i_stall(stall),

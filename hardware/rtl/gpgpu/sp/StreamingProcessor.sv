@@ -263,7 +263,7 @@ module StreamingProcessor #(
     //! PIPELINE REGISTER 4: MEMORY -> WRITE BACK
     //! =========================================================================
     reg memwb_is_mul, memwb_is_load;
-    reg [31:0] memwb_alu_out;
+    reg [31:0] memwb_alu_out, memwb_rdata;
     reg [$clog2(`IMEM_ENTRIES)+1:0] memwb_program_counter;
 
     always @(posedge clk) begin

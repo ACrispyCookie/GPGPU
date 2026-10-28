@@ -1,3 +1,6 @@
+
+//! DEPRECATED
+
 module HostCommandProcessor (
     input clk,
     input rst,
