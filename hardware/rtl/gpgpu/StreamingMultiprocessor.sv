@@ -14,7 +14,7 @@ module StreamingMultiprocessor
     output imem_idx_t o_imem_addr,
     output logic o_imem_ren,
 
-    MemorySubsystemInterface.requester [NUM_CORES] memory_bus,
+    MemorySubsystemInterface.requester memory_bus [NUM_CORES],
     
     output logic o_kernel_complete
 );
@@ -23,7 +23,7 @@ module StreamingMultiprocessor
     logic data_hazard, flush;
 
     // Memory stall signal
-    logic stall = !(&mem_response_received) && mem_is_mem_vec[0];
+    logic stall;
 
     //! =========================================================================
     //! STAGE 1: INSTRUCTION FETCH
@@ -135,9 +135,10 @@ module StreamingMultiprocessor
 
     logic [NUM_CORES-1:0] mem_response_received;
     logic [NUM_CORES-1:0] mem_is_mem_vec;
+    assign stall = !(&mem_response_received) && mem_is_mem_vec[0];
 
     generate
-        for (i = 0; i < NUM_CORES; i = i + 1) begin : cores
+        for (genvar i = 0; i < NUM_CORES; i = i + 1) begin : cores
 
             StreamingProcessor #(.CORE_ID(i)) core (
                 .clk(clk),
@@ -154,7 +155,7 @@ module StreamingMultiprocessor
                 .o_feedback(sp_feedback[i]),
 
                 //! Memory
-                .memory(memory_bus[i]),
+                .memory_if(memory_bus[i]),
                 .mem_response_received(mem_response_received[i]),
                 .mem_is_mem(mem_is_mem_vec[i]),
 

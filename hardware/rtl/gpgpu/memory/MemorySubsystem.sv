@@ -5,7 +5,7 @@ module MemorySubsystem #(
     input logic rst,
     input logic abort,
 
-    MemorySubsystemInterface.responder [N] memory_bus
+    MemorySubsystemInterface.responder memory_bus [N]
 );
 
     // //& ===============

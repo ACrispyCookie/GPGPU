@@ -22,12 +22,12 @@ module StreamingProcessor
 
     //! Memory
     MemorySubsystemInterface.requester memory_if,
-    output mem_response_received,
-    output mem_is_mem,
+    output logic mem_response_received,
+    output logic mem_is_mem,
 
     //! Control
     input i_stall,
-    output o_core_complete
+    output logic o_core_complete
 );
 
     ex_mem_t exmem;
@@ -198,22 +198,20 @@ module StreamingProcessor
     //! =========================================================================
     //! STAGE 4: MEMORY
     //! =========================================================================
-    wire mem_is_load, mem_is_store;
-    assign mem_is_load = (exmem_opcode == OP_LW);
-    assign mem_is_store = (exmem_opcode == OP_SW);
+    logic mem_is_load, mem_is_store;
+    word_t temp_memory;
+    assign mem_is_load = (exmem.opcode == OP_LW);
+    assign mem_is_store = (exmem.opcode == OP_SW);
     assign mem_is_mem = mem_is_load | mem_is_store;
 
     assign memory_if.req_valid = !mem_response_received && (mem_is_load | mem_is_store);
-    assign memory_if.req.addr = exmem_alu_out[$clog2(DMEM_ENTRIES)+1 : 2];
+    assign memory_if.req.addr = exmem.alu_out[$clog2(DMEM_ENTRIES)+1 : 2];
     assign memory_if.req.write = mem_is_store;
-    assign memory_if.req.wdata = exmem_reg_b;
+    assign memory_if.req.wdata = exmem.reg_b;
 
     assign memory_if.rsp_ready = 'b1;
 
-    assign o_core_complete = exmem_core_complete;
-
-    logic word_t temp_memory;
-    logic mem_response_received;
+    assign o_core_complete = exmem.core_complete;
 
     always_ff @(posedge clk) begin
         if (!rst) begin

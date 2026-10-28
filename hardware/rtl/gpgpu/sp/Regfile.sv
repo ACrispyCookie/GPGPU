@@ -33,7 +33,7 @@ module Regfile
     //! Write
     always_ff @(posedge clk) begin
         if (!rst) begin
-            for (int i = 0; i < REG_COUNT; i++) begin
+            for (int unsigned i = 0; i < REG_COUNT; i++) begin
                 if (i == 2) begin
                     data[i] <= STACK_P_INIT;
                 end else if (i == TXD_REGISTER) begin
