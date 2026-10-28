@@ -8,6 +8,13 @@ package gpu_pkg;
     localparam int unsigned REG_ADDR_W = $clog2(REG_COUNT);
     localparam int unsigned IMEM_AW = $clog2(IMEM_ENTRIES);
     localparam int unsigned DMEM_AW = $clog2(DMEM_ENTRIES);
+    localparam int unsigned DMEM_BASE = 'h0;
+    localparam int unsigned FB0_BASE = 'h1800_0000;
+    localparam int unsigned FB1_BASE = 'h1840_0000;
+    localparam int unsigned TEX_BASE = 'h1880_0000;
+    localparam int unsigned DMEM_SIZE = DMEM_ENTRIES * XLEN;
+    localparam int unsigned FB_SIZE = 'h0038_4000;
+    localparam int unsigned TEX_SIZE = 'h0080_0000;
 
     localparam logic [XLEN-1:0] INITIAL_PC = 32'h0000_0000;
     localparam logic [XLEN-1:0] NOP_INSTR = 32'h0000_0013;
