@@ -1,11 +1,13 @@
 `include "constants.svh"
 
-module MemoryController #(
-    .SP_PER_SM(SP_PER_SM)
+module MemorySubsystem #(
+    .N(32)
 ) (
     input logic clk,
-    output logic o_stall,
-    MemoryInterface.slave memory
+    input logic rst,
+    input logic abort,
+
+    MemorySubsystemInterface.responder [N] memory_bus
 );
 
     //& ===============
