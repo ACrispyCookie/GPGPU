@@ -35,7 +35,9 @@ module StreamingProcessor #(
     output [4:0] o_mul3_rd,
 
     //! Memory
-    MemorySubsystemInterface.requester memory,
+    MemorySubsystemInterface.requester memory_if,
+    output mem_response_received,
+    output mem_is_mem,
 
     //! Control
     input i_stall,
@@ -231,15 +233,31 @@ module StreamingProcessor #(
     wire mem_is_load, mem_is_store;
     assign mem_is_load = (exmem_opcode == `OP_LW);
     assign mem_is_store = (exmem_opcode == `OP_SW);
+    assign mem_is_mem = mem_is_load | mem_is_store;
 
-    assign memory.addr = exmem_alu_out[$clog2(`DMEM_ENTRIES)+1 : 2];
-    assign memory.ren = mem_is_load | mem_is_store;
-    assign memory.wen = mem_is_store;
-    assign memory.wdata = exmem_reg_b;
+    assign memory_if.req_valid = !mem_response_received && (mem_is_load | mem_is_store);
+    assign memory_if.req.addr = exmem_alu_out[$clog2(`DMEM_ENTRIES)+1 : 2];
+    assign memory_if.req.write = mem_is_store;
+    assign memory_if.req.wdata = exmem_reg_b;
 
-    assign memory.req
+    assign memory_if.rsp_ready = 1'b1;
 
     assign o_core_complete = exmem_core_complete;
+
+    logic [31:0] temp_memory;
+    logic mem_response_received;
+
+    always_ff @(posedge clk) begin
+        if (!rst) begin
+            temp_memory <= 32'b0;
+            mem_response_received <= 1'b0;
+        end else if (memory_if.rsp_ready && memory_if.rsp_valid) begin
+            temp_memory <= memory_if.rsp.rdata;
+            mem_response_received <= 1'b1;
+        end else if (!i_stall) begin
+            mem_response_received <= 1'b0;
+        end
+    end
 
     //! =========================================================================
     //! PIPELINE REGISTER 4: MEMORY -> WRITE BACK
@@ -255,6 +273,7 @@ module StreamingProcessor #(
             memwb_is_load <= 1'b0;
             memwb_alu_out <= 32'b0;
             memwb_wen <= 1'b0;
+            memwb_rdata <= 32'b0;
             memwb_program_counter <= `INITIAL_PC;
         end else if (i_stall) begin
             // Retain state during memory stall
@@ -264,6 +283,7 @@ module StreamingProcessor #(
             memwb_is_load <= mem_is_load;
             memwb_alu_out <= exmem_alu_out;
             memwb_wen <= exmem_wen;
+            memwb_rdata <= temp_memory;
             memwb_program_counter <= exmem_program_counter;
         end
     end
@@ -271,25 +291,8 @@ module StreamingProcessor #(
     //! =========================================================================
     //! STAGE 5: WRITE BACK
     //! =========================================================================
-    reg [31:0] safe_wb_rdata;
-    reg safe_wb_valid;
 
-    always @(posedge clk) begin
-        if (!rst) begin
-            safe_wb_rdata <= 32'b0;
-            safe_wb_valid <= 1'b0;
-        end else if (!i_stall) begin
-            //! Pipeline is moving normally. Clear the vault for the next instruction.
-            safe_wb_valid <= 1'b0;
-        end else if (memwb_is_load && !safe_wb_valid) begin
-            //! FIX: We are stalled, and we are a load. Latch the memory data immediately 
-            //! before a subsequent load wins the crossbar and overwrites the shared bus.
-            safe_wb_rdata <= memory.rdata;
-            safe_wb_valid <= 1'b1;
-        end
-    end
-
-    assign wb_wdata = memwb_is_load ? (safe_wb_valid ? safe_wb_rdata : memory.rdata) : memwb_alu_out;
+    assign wb_wdata = memwb_is_load ? memwb_rdata : memwb_alu_out;
 
     //& ===============
     //& FORWARDING

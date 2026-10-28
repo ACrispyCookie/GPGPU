@@ -11,8 +11,7 @@ module StreamingMultiprocessor #(
     output [`IMEM_AW-1:0] o_imem_addr,
     output o_imem_ren,
 
-    MemorySubsystemInterface.requester memory_bus,
-    input i_stall,
+    MemorySubsystemInterface.requester [NUM_CORES] memory_bus,
 
     output o_kernel_complete
 );
@@ -20,6 +19,9 @@ module StreamingMultiprocessor #(
     wire [$clog2(`IMEM_ENTRIES)-1:0] ex_beq_target_idx;
     wire data_hazard, flush;
     reg [4:0] idex_rd;
+
+    // Memory stall signal
+    logic stall = !(&mem_response_received) && mem_is_mem_vec[0];
 
     //! =========================================================================
     //! STAGE 1: INSTRUCTION FETCH
@@ -201,6 +203,9 @@ module StreamingMultiprocessor #(
     assign mul3_rd = core_mul3_rd[0];
     assign o_kernel_complete = core_complete[0]; //! Assign first one since divergence isnt supported
 
+    logic [NUM_CORES-1:0] mem_response_received;
+    logic [NUM_CORES-1:0] mem_is_mem_vec;
+
     generate
         for (i = 0; i < NUM_CORES; i = i + 1) begin : cores
 
@@ -238,6 +243,8 @@ module StreamingMultiprocessor #(
 
                 //! Memory
                 .memory(memory_bus[i]),
+                .mem_response_received(mem_response_received[i]),
+                .mem_is_mem(mem_is_mem_vec[i])
 
                 //! Control Pins
                 .i_stall(stall),

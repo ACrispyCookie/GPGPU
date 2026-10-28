@@ -68,9 +68,6 @@ module GPGPU #(
     assign imem_if.wen = o_core_running ? 1'b0 : host_imem.wen;
     assign host_imem.rdata = imem_if.rdata;
 
-    // Memory stall signal
-    logic stall;
-
     MMIOController mmio (
         .clk(clk), .rst_n(rst_n),
         .i_req_valid(i_req_valid), .o_req_ready(o_req_ready),
@@ -111,8 +108,7 @@ module GPGPU #(
         .o_imem_addr(core_imem_addr),
         .o_imem_ren(core_imem_ren),
 
-        .memory_bus(memory_bus.requester),
-        .i_stall(stall),
+        .memory_bus(memory_if.requester),
 
         .o_kernel_complete(core_complete)
     );
@@ -134,9 +130,7 @@ module GPGPU #(
 
     //! Data memory (BRAM + DRAM)
 
-    MemorySubsystemInterface #(
-        .N(SP_PER_SM)
-    ) memory_bus();
+    MemorySubsystemInterface [SP_PER_SM] memory_if();
 
     DataMemorySubsystem #(
         .N(SP_PER_SM)
@@ -144,8 +138,7 @@ module GPGPU #(
         .clk(clk),
         .rst_n(rst_n),
         .abort(1'b0),
-        .idle(),
-        .mem(memory_bus)
+        .memory_bus(memory_if.responder)
     );
 
 endmodule
