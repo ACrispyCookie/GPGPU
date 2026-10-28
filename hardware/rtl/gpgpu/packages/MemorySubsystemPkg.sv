@@ -10,15 +10,15 @@ package MemorySubsystemPkg;
     } mem_fault_t;
 
     typedef struct packed {
-        logic        write;
-        logic [31:0] addr;
-        logic [31:0] wdata;
-        // logic [3:0]  wstrb; // for future use
+        logic write;
+        gpu_pkg::word_t addr;
+        gpu_pkg::word_t wdata;
+        // gpu_pkg::strb_t wstrb; // for future use
     } mem_req_t;
 
     typedef struct packed {
-        logic [31:0] rdata;
-        mem_fault_t  fault;
+        gpu_pkg::word_t rdata;
+        mem_fault_t fault;
     } mem_rsp_t;
 
 endpackage

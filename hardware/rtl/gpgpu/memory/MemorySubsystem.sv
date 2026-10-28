@@ -43,7 +43,7 @@ module MemorySubsystem #(
     //& ===============
     //& CROSSBAR & STALL LOGIC
     //& ===============
-    wire [`DMEM_AW-1:0] sp_mem_addr [0:NUM_CORES-1];
+    wire [DMEM_AW-1:0] sp_mem_addr [0:NUM_CORES-1];
     wire [31:0] sp_mem_wdata [0:NUM_CORES-1];
     wire [NUM_CORES-1:0] sp_mem_ren;
     wire [NUM_CORES-1:0] sp_mem_wen;
@@ -75,13 +75,13 @@ module MemorySubsystem #(
     //& GLOBAL DATA MEMORY CROSSBAR
     //& ===============
 
-    wire [NUM_CORES*`DMEM_AW-1:0] flat_mem_addr;
+    wire [NUM_CORES*DMEM_AW-1:0] flat_mem_addr;
     wire [NUM_CORES*32-1:0] flat_mem_wdata;
 
     genvar i;
     generate
         for (i = 0; i < NUM_CORES; i = i + 1) begin : gen_flat
-            assign flat_mem_addr[i*`DMEM_AW +: `DMEM_AW] = sp_mem_addr[i];
+            assign flat_mem_addr[i*DMEM_AW +: DMEM_AW] = sp_mem_addr[i];
             assign flat_mem_wdata[i*32 +: 32] = sp_mem_wdata[i];
             
             //! If granted exactly 1 cycle ago, read live directly from crossbar
@@ -92,8 +92,8 @@ module MemorySubsystem #(
 
     MemoryCrossbarNx2 #(
         .N(NUM_CORES),
-        .DEPTH(`DMEM_ENTRIES),
-        .ADDR_W(`DMEM_AW)
+        .DEPTH(DMEM_ENTRIES),
+        .ADDR_W(DMEM_AW)
     ) memCrossbar (
         .clk(clk),
         .rst(rst),
