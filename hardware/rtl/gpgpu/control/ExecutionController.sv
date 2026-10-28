@@ -1,6 +1,6 @@
-`include "constants.svh"
-
-module ExecutionController (
+module ExecutionController 
+    import control_pkg::*;
+(
     input logic clk,
     input logic rst_n,
     input logic i_start,
@@ -8,21 +8,15 @@ module ExecutionController (
     input logic i_clear_stopped,
     input logic i_core_complete,
 
-    output logic [1:0] o_core_state,
+    output core_state_t o_core_state,
     output logic o_stopped,
     output logic o_complete_pulse
 );
-    typedef enum logic [1:0] {
-        IDLE = `CORE_IDLE,
-        RESET = `CORE_RESET,
-        RUNNING = `CORE_RUNNING
-    } core_state_t;
-
     core_state_t current_state, next_state;
 
     always_ff @(posedge clk) begin
         if (!rst_n) begin
-            current_state <= IDLE;
+            current_state <= CORE_IDLE;
         end else begin
             current_state <= next_state;
         end
@@ -30,60 +24,60 @@ module ExecutionController (
 
     always_comb begin
         case (current_state)
-            IDLE: begin
+            CORE_IDLE: begin
                 if (i_start && !i_stop && !o_stopped) begin
-                    next_state = RESET;
+                    next_state = CORE_RESET;
                 end else begin
-                    next_state = IDLE;
+                    next_state = CORE_IDLE;
                 end
             end
-            RESET: begin
+            CORE_RESET: begin
                 if (i_stop) begin
-                    next_state = IDLE;
+                    next_state = CORE_IDLE;
                 end else begin
-                    next_state = RUNNING;
+                    next_state = CORE_RUNNING;
                 end
             end
-            RUNNING: begin
+            CORE_RUNNING: begin
                 if (i_stop || i_core_complete) begin
-                    next_state = IDLE;
+                    next_state = CORE_IDLE;
                 end else begin
-                    next_state = RUNNING;
+                    next_state = CORE_RUNNING;
                 end
             end
-            default: next_state = IDLE;
+            default: next_state = CORE_IDLE;
         endcase
     end
 
     always_comb begin
         case (current_state)
-            IDLE: begin
-                o_core_state = `CORE_IDLE;
+            CORE_IDLE: begin
+                o_core_state = CORE_IDLE;
             end
-            RESET: begin
-                o_core_state = `CORE_RESET;
+            CORE_RESET: begin
+                o_core_state = CORE_RESET;
             end
-            RUNNING: begin
-                o_core_state = `CORE_RUNNING;
+            CORE_RUNNING: begin
+                o_core_state = CORE_RUNNING;
             end
             default: begin
-                o_core_state = `CORE_IDLE;
+                o_core_state = CORE_IDLE;
             end
         endcase
     end
 
     // Pre-edge normal-completion event: consumers latch it on the same edge
-    // that returns RUNNING to IDLE. STOP suppresses completion, preserving abort.
-    assign o_complete_pulse = (o_core_state == `CORE_RUNNING) && i_core_complete && !i_stop;
+    // that returns CORE_RUNNING to CORE_IDLE. STOP suppresses completion, preserving abort.
+    assign o_complete_pulse = (o_core_state == CORE_RUNNING) && i_core_complete && !i_stop;
 
-    // STOPPED inhibits START until explicitly acknowledged or externally reset.
+    // STOPPED inhibits START until explicitly acknowledged or externally CORE_RESET.
     always_ff @(posedge clk) begin
         if (!rst_n) begin
-            o_stopped <= 1'b0;
-        end else if (i_stop && current_state != IDLE) begin
-            o_stopped <= 1'b1;
+            o_stopped <= '0;
+        end else if (i_stop && current_state != CORE_IDLE) begin
+            o_stopped <= '1;
         end else if (i_clear_stopped) begin
-            o_stopped <= 1'b0;
+            o_stopped <= '0;
         end
     end
 

@@ -78,10 +78,10 @@ def checked_state(uart):
             'matching idle/running PL and host ELF before loading programs. '
             f'Status: {status}'
         )
-    keys = ('idle', 'running', 'busy', 'done')
+    keys = ('idle', 'running', 'stopped')
     if (any(type(status.get(key)) is not int or status[key] not in (0, 1) for key in keys)
             or 'ERROR' in str(status.get('text', ''))
-            or status['busy'] or status['running'] or status['idle'] != 1):
+            or status['running'] or status['idle'] != 1):
         raise RuntimeError(f'Unsafe or malformed UART status: {status}')
     return 'idle'
 
