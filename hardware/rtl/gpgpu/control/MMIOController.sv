@@ -1,5 +1,5 @@
 module MMIOController 
-    import control_pkg::*;
+    import ControlPkg::*;
     import gpu_pkg::*;
 (
     input logic clk,

@@ -2,7 +2,7 @@
 
 module GPGPU
     import gpu_pkg::*;
-    import control_pkg::*;
+    import ControlPkg::*;
 #(
     parameter int unsigned SP_PER_SM = 32,
     parameter string MEMORY_INIT = "empty.mem"
@@ -50,8 +50,6 @@ module GPGPU
     MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) host_dmem ();
 
     // SMX memory signals
-    MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) core_dmem_a ();
-    MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) core_dmem_b ();
     imem_idx_t core_imem_addr;
     logic core_imem_ren;
 

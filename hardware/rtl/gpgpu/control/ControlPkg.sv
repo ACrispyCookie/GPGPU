@@ -1,4 +1,4 @@
-package control_pkg;
+package ControlPkg;
 
     //! CSR addresses (Basically commands to GPU)
     localparam logic [gpu_pkg::XLEN-1:0] REG_INFO = gpu_pkg::XLEN'('h0000);

@@ -1,5 +1,5 @@
 module ExecutionController 
-    import control_pkg::*;
+    import ControlPkg::*;
 (
     input logic clk,
     input logic rst_n,
