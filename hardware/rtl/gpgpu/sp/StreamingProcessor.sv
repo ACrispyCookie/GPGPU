@@ -62,7 +62,7 @@ module StreamingProcessor
     ) regfile (
         .clk(clk), .rst(rst), .i_wen(memwb.wen), .i_wdata(wb_wdata), 
         .i_addr_a(i_id_mux_rs1), .i_addr_b(i_id_mux_rs2), .i_waddr(memwb.rd), 
-        .o_reg_a(ex_reg_a), .o_reg_b(ex_reg_b), .i_global_stall(i_stall)
+        .o_reg_a(ex_reg_a), .o_reg_b(ex_reg_b), .i_stall(i_stall)
     );
 
     //? --- Forwarding Multiplexer B ---
@@ -97,7 +97,7 @@ module StreamingProcessor
         .rst(rst),
         .i_operand_a(ex_actual_alu_in_a), 
         .i_operand_b(ex_actual_alu_in_b),
-        .i_global_stall(i_stall),
+        .i_stall(i_stall),
         .i_alu_op(i_idex.alu_op), 
         .i_mul_valid(mul3.hazard.valid),
         .o_alu_out(ex_alu_out),
@@ -236,7 +236,7 @@ module StreamingProcessor
                 program_counter: INITIAL_PC,
                 default: '0
             };
-        end else if (i_global_stall) begin
+        end else if (i_stall) begin
             // Retain state during memory stall
         end else begin
             memwb <= '{
