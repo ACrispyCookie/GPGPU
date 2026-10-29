@@ -72,7 +72,9 @@ Production sources come from the config, not from a tracked list: the shared
 under `paths.rtl.sources.gpgpu`, minus `hardware.vivado.exclude_sources` (bare
 directory/file names matched at any depth, or paths relative to the RTL root;
 excluded `ordered` entries are dropped). Headers are packaged first as include
-headers, then the `ordered` files, then the rest in path order.
+headers, then the `ordered` files, then the rest in path order, with the
+file declaring the IP top module (`gpgpu_axi`) moved last: with a manual compile
+order `ipx::package_project` takes the last file as the top-level file.
 `hardware.vivado.memory_init` is staged before all of them. Python writes the
 resolved list to `<ip project>/.gpgpu/sources.tsv` (`<kind>\t<path>` lines) and
 passes only that file as `-sources-manifest`: long or brace-quoted list

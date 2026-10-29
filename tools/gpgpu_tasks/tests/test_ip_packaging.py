@@ -1,5 +1,6 @@
 """Portable production IP packaging contracts; no Vivado/reference mutation."""
 import importlib.util
+import re
 from pathlib import Path
 import shutil
 import subprocess
@@ -63,6 +64,10 @@ def test_production_inputs_follow_configuration():
     assert not any(excluded & set(p.relative_to(root).parts) for p in sources)
     assert all(p.suffix in config.get('hardware.sources.header_extensions') for p in headers)
     assert all(p.suffix in config.get('hardware.sources.extensions') for p in sources[len(headers):])
+    # ipx::package_project takes the last compile-order file as the IP top file.
+    from tools.hardware.vivado.tasks import IP_TOP
+    declares = [p for p in sources if re.search(rf'^\s*module\s+{IP_TOP}\b', p.read_text(), re.M)]
+    assert declares == [sources[-1]]
     # Every resolved input passes the Tcl-side check Vivado runs.
     tcl = tcl_interpreter()
     tcl.eval(f'source {{{FLOW / "production_sources.tcl"}}}')
@@ -148,7 +153,7 @@ def test_validate_portable_production_package(tmp_path):
 
 @pytest.mark.parametrize('mutation', [
     'missing_memory','missing_source','absolute_path','traversal','external_symlink',
-    'extra_source','header_not_include','header_type','memory_type','interface_order','memory_last',
+    'extra_source','header_not_include','header_type','memory_type','interface_order','memory_last','top_not_last',
     'range_4gb','range_dependency','wrong_clock','wrong_reset','edge_irq',
     'wrong_bus_map','wrong_protocol','wrong_vlnv','missing_hdl_mapping',
     'wrong_xgui_mapping','missing_gui','invalid_xml','external_metadata','external_include','external_memory', 'header_not_sibling',
@@ -196,6 +201,9 @@ def test_package_validation_fails_closed(tmp_path, mutation):
     elif mutation=='memory_last':
         memory = next(f for f in files[0].findall('s:file',ns) if f.findtext('s:name',namespaces=ns).endswith('empty.mem'))
         files[0].remove(memory); files[0].append(memory)
+    elif mutation=='top_not_last':
+        for group in files[:2]:
+            entries=group.findall('s:file',ns);top=entries[-1];group.remove(top);group.insert(list(group).index(entries[1]),top)
     elif mutation=='interface_order':
         interface=next(f for f in files[0].findall('s:file',ns) if f.findtext('s:name',namespaces=ns).endswith('MemoryInterface.sv'));files[0].remove(interface);files[0].append(interface)
     elif mutation=='range_4gb': r.find('s:memoryMaps/s:memoryMap/s:addressBlock/s:range',ns).text='0x100000000'

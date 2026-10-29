@@ -193,6 +193,11 @@ def validate_package(path: str | Path, memory_init: Path, sources: Sequence[Path
             require(text(entries[-1], 'fileType') == 'systemVerilogSource' and
                     text(entries[-1], 'isIncludeFile') not in ('true', '1'),
                     f'Last fileset entry must be HDL: {group_name}')
+            # The packager treats the last compile-order file as the top file.
+            top = text(component, 'name')
+            require(re.search(rf'^\s*module\s+{re.escape(top)}\b',
+                              (root / text(entries[-1], 'name')).read_text(), re.M),
+                    f'Last fileset entry must declare top module {top}: {group_name}')
             for header in (e for e in entries if PurePosixPath(text(e, 'name')).name in header_names):
                 require(text(header, 'isIncludeFile') in ('true', '1'),
                         f'{text(header, "name")} is not an include in {group_name}')

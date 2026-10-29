@@ -50,7 +50,8 @@ hardware:
     peripheral:
       base_address: "0x43C00000"
       range: "0x00010000"
-    # Production IP: hardware.sources minus `exclude_sources` (headers first).
+    # Production IP: hardware.sources minus `exclude_sources`; headers first,
+    # the file declaring the IP top module last (the packager's top file).
     # Keeps interfaces/ (the AXI4-Lite top); drops the deprecated host command
     # processor. `memory_init` (repo-relative) is staged before all HDL; its
     # file name must match the RTL's default $readmemh name.

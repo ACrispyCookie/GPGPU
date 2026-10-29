@@ -17,10 +17,23 @@ from src.project_paths import ProjectPaths
 from src.hardware_contract import axi_address, identifier, rtl_sources, string_list, xsa_path
 
 
+IP_TOP = 'gpgpu_axi'
+
+
 def production_inputs(config):
     """(memory_init, sources, headers) for the IP: hardware.sources minus
-    hardware.vivado.exclude_sources, headers first so they precede every consumer."""
+    hardware.vivado.exclude_sources, headers first so they precede every consumer.
+
+    The file declaring the IP top module goes last: with a manual compile order
+    ipx::package_project takes the LAST file as the top-level file and parses
+    its ports, so any other file there breaks packaging.
+    """
     rtl, headers = rtl_sources(config, string_list(config, 'hardware.vivado.exclude_sources'))
+    declares_top = re.compile(rf'^\s*module\s+{IP_TOP}\b', re.M)
+    tops = [path for path in rtl if declares_top.search(path.read_text())]
+    if len(tops) != 1:
+        raise ValueError(f'Exactly one Vivado source must declare module {IP_TOP}; found {tops}')
+    rtl = [*(path for path in rtl if path != tops[0]), tops[0]]
     value = config.get('hardware.vivado.memory_init')
     if not isinstance(value, str) or not value:
         raise TypeError('hardware.vivado.memory_init must be a non-empty string')
@@ -331,7 +344,7 @@ def create_tasks(config):
 
     def command(script, ip=False):
         values = {'project-dir': ip_dir if ip else system, 'project-name': ip_name if ip else name,
-                  'part': part, 'bd-name': bd_name, 'top': 'gpgpu_axi' if ip else top,
+                  'part': part, 'bd-name': bd_name, 'top': IP_TOP if ip else top,
                   'sources-manifest': ip_dir / '.gpgpu/sources.tsv', 'xdc-file': xdc,
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
