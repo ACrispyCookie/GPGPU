@@ -73,9 +73,46 @@ tests:
         - memory/MemoryInterface.sv
         - memory/MemorySubsystemPkg.sv
         - memory/MemorySubsystemInterface.sv
+    # Applied to a suite when its `trace` is true: extra Verilator flags, and
+    # the dump file passed to the bench as +DUMP_FILE (written in the suite's
+    # build directory). FST keeps enum names; --trace-structs splits packed
+    # structs into named fields.
+    trace:
+      verilator_flags:
+        - --trace-fst
+        - --trace-structs
+      dump_file: dumpfile.fst
+    # Per suite: `testbench` is relative to the repository root, `top` is the
+    # bench's top module, `plusargs` are passed to the simulator as +NAME=value.
     smx:
-      # Compile with --trace and run with +DUMP; VCD stays in build/tests/rtl/smx.
+      testbench: tests/hardware/rtl/tb_GPGPU.sv
+      top: tb_GPGPU_smx_only
       trace: false
+      plusargs: {}
+    e2e:
+      testbench: tests/hardware/rtl/tb_GPGPU_e2e.sv
+      top: tb_GPGPU_e2e
+      trace: false
+      # AXI4-Lite top sources (relative to sources.gpgpu), added on top of the
+      # shared sources because `interfaces` is excluded for the SMX build.
+      sources:
+        - interfaces/AXI4LiteSlave.sv
+        - interfaces/AXI4LiteTop.v
+      # All required by the bench (no defaults in SystemVerilog). +TEST_END
+      # is optional and may be added here to stop after a given case.
+      plusargs:
+        TEST_ROOT: cases            # relative to the suite's run directory
+        CASE_PREFIX: test           # case directories are <prefix><index>
+        TEST_IDX: 1                 # first case index
+        PROGRAM_FILE: program.mem
+        DATA_FILE: data.mem
+        CLOCK_PERIOD_NS: 10
+        RESET_CYCLES: 20
+        TEST_TIMEOUT_CYCLES: 10000  # launch to completion IRQ
+        AXI_TIMEOUT_CYCLES: 1000    # per AXI channel handshake
+        RET_INSTR: "00008067"       # hex; kernel end, IMEM is loaded up to it
+        UNMAPPED_ADDR: "00008000"   # hex; must decode to no CSR/IMEM/DMEM
+        INFO_VERSION: 1             # INFO[31:16] reported by the CSR bank
     random:
       iterations: 100
       # Set a non-zero integer for reproducibility; 0 chooses and prints a seed.

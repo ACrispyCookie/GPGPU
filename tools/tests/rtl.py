@@ -8,6 +8,7 @@ import re
 import shlex
 import subprocess
 import sys
+from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any, TextIO
 
 from doit.tools import config_changed
@@ -79,6 +80,29 @@ def _configured_positive_int(config: ResolvedConfig, key: str) -> int:
         raise TypeError(f"{key} must be a positive integer")
     return value
 
+def _configured_bool(config: ResolvedConfig, key: str) -> bool:
+    value = config.get(key)
+    if not isinstance(value, bool):
+        raise TypeError(f"{key} must be a boolean")
+    return value
+
+def _configured_str_list(config: ResolvedConfig, key: str) -> list[str]:
+    value = config.get(key)
+    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)) \
+            or not all(isinstance(item, str) for item in value):
+        raise TypeError(f"{key} must be a list of strings")
+    return list(value)
+
+def _configured_plusargs(config: ResolvedConfig, key: str) -> list[str]:
+    """Render a {NAME: value} mapping as simulator +NAME=value arguments."""
+    value = config.get(key)
+    if not isinstance(value, Mapping) or not all(
+        isinstance(name, str) and isinstance(arg, (str, int, float)) and not isinstance(arg, bool)
+        for name, arg in value.items()
+    ):
+        raise TypeError(f"{key} must be a mapping of names to strings or numbers")
+    return [f"+{name}={arg}" for name, arg in value.items()]
+
 def _test_cases(cases_root: Path) -> list[Path]:
     return sorted(
         (
@@ -114,13 +138,6 @@ def run_smx(command: list[str], test_root: Path, log: Path) -> None:
         cases.symlink_to(test_root / "cases", target_is_directory=True)
     run_simulation(command, runtime, log)
 
-def deferred_e2e() -> None:
-    raise RuntimeError(
-        "E2E RTL simulation is deferred: its testbench has not been migrated to "
-        "the current interface. Use tests:rtl:smx:all for SMX-only verification; "
-        "aggregate RTL tasks still require E2E and cannot report full success."
-    )
-
 def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create generation, build, run, and aggregate tasks for RTL tests."""
     repo_root = config.repo_root
@@ -133,14 +150,26 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     verilator = _configured_command(config, "tools.verilator.command")
     make = _configured_command(config, "tools.make.command")
     cxx = _configured_command(config, "tools.native_cxx.command")
-    trace = config.get("tests.rtl.smx.trace")
-    if not isinstance(trace, bool):
-        raise TypeError("tests.rtl.smx.trace must be a boolean")
+    trace_flags = _configured_str_list(config, "tests.rtl.trace.verilator_flags")
+    dump_file = _configured_command(config, "tests.rtl.trace.dump_file")
     num_cores = _configured_positive_int(config, "architecture.num_cores")
     assembler = repo_root / "tools/tests/assembler.py"
     expected_generator = repo_root / "tools/tests/expected_generator.py"
     random_tester = repo_root / "tools/tests/random_tester.py"
-    testbenches = {"smx": test_root / "tb_GPGPU.sv"}
+    # Suite names are the task namespace; everything else about a suite
+    # (bench file, top module, tracing, runtime plusargs) comes from config.
+    suites = ("smx", "e2e")
+    testbenches = {
+        suite: repo_root / _configured_command(config, f"tests.rtl.{suite}.testbench")
+        for suite in suites
+    }
+    testbench_tops = {
+        suite: _configured_command(config, f"tests.rtl.{suite}.top") for suite in suites
+    }
+    traces = {suite: _configured_bool(config, f"tests.rtl.{suite}.trace") for suite in suites}
+    run_plusargs = {
+        suite: _configured_plusargs(config, f"tests.rtl.{suite}.plusargs") for suite in suites
+    }
     cases = _test_cases(cases_root)
     assembly_sources = [case / "program.asm" for case in cases]
     optional_seeds = [
@@ -210,6 +239,18 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     rtl_sources = [*first, *(p for p in all_sv if p.resolve() not in rank)]
     rtl_headers = sorted(p for p in rtl_src_root.rglob("*.svh") if _included(p))
 
+    # The E2E bench drives the AXI4-Lite top, whose sources live in an excluded
+    # directory (and may be plain .v). They are listed explicitly, relative to
+    # the RTL root, and appended after the shared sources.
+    e2e_extra = _configured_str_list(config, "tests.rtl.e2e.sources")
+    suite_sources = {
+        "smx": rtl_sources,
+        "e2e": [*rtl_sources, *(rtl_src_root / rel for rel in e2e_extra)],
+    }
+    for source in suite_sources["e2e"]:
+        if not source.is_file():
+            raise FileNotFoundError(f"tests.rtl.e2e.sources entry not found: {source}")
+
     tasks: list[dict[str, Any]] = [
         {
             "name": "tests:rtl:generate",
@@ -239,11 +280,9 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "clean": True,
         }
     ]
-    testbench_tops = {
-        "e2e": "tb_GPGPU_e2e",
-        "smx": "tb_GPGPU_smx_only",
-    }
     for suite, testbench in testbenches.items():
+        trace = traces[suite]
+        sources = suite_sources[suite]
         suite_build_root = build_root / suite
         executable = suite_build_root / "main"
         simulation_log = suite_build_root / "simulation.log"
@@ -255,8 +294,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "--top-module", testbench_tops[suite], f"-GNUM_CORES={num_cores}",
             "--Mdir", str(suite_build_root), "-o", executable.name,
             "-MAKEFLAGS", shlex.join([f"CXX={cxx}", f"LINK={cxx}"]),
-            *(["--trace"] if trace else []),
-            *(str(source) for source in rtl_sources), str(testbench),
+            *(trace_flags if trace else []),
+            *(str(source) for source in sources), str(testbench),
         ]
         tasks.extend(
             [
@@ -265,7 +304,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     "actions": [
                         (run_compilation, [compile_command, repo_root, suite_build_root, make])
                     ],
-                    "file_dep": [str(testbench), *(str(source) for source in (*rtl_sources, *rtl_headers))],
+                    "file_dep": [str(testbench), *(str(source) for source in (*sources, *rtl_headers))],
                     "targets": [str(executable)],
                     "uptodate": [config_changed({"command": compile_command, "make": make})],
                     "clean": True,
@@ -275,7 +314,15 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     "actions": [
                         (
                             run_smx,
-                            [[str(executable), *(["+DUMP"] if trace else [])], test_root, simulation_log],
+                            [
+                                [
+                                    str(executable),
+                                    *run_plusargs[suite],
+                                    *([f"+DUMP_FILE={dump_file}"] if trace else []),
+                                ],
+                                test_root,
+                                simulation_log,
+                            ],
                         )
                     ],
                     "task_dep": ["tests:rtl:generate", build_task],
@@ -334,10 +381,6 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             "uptodate": [False],
             "clean": True,
         }
-    )
-    tasks.extend(
-        {"name": f"tests:rtl:e2e:{stage}", "actions": [(deferred_e2e, [])], "uptodate": [False]}
-        for stage in ("build", "run", "all")
     )
     tasks.extend(
         [

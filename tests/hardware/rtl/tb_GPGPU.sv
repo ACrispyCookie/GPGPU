@@ -33,6 +33,7 @@ module tb_GPGPU_smx_only
     reg [8*255:0] data_file;
     reg [8*255:0] reg_file;
     reg [8*255:0] trace_file;
+    string dump_file;
 
     GPGPU #(.SP_PER_SM(NUM_CORES), .MEMORY_INIT("")) UUT (
         .clk(clk_in), .rst_n(rst),
@@ -233,8 +234,9 @@ module tb_GPGPU_smx_only
     end
 
     initial begin
-        if ($test$plusargs("DUMP")) begin
-            $dumpfile("dumpfile.vcd");
+        // Waveforms are dumped only when the runner passes +DUMP_FILE.
+        if ($value$plusargs("DUMP_FILE=%s", dump_file)) begin
+            $dumpfile(dump_file);
             $dumpvars(0, tb_GPGPU_smx_only);
         end
     end

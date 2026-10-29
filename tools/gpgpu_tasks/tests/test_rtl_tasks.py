@@ -20,6 +20,19 @@ class StubResolvedConfig:
             "tools.make.command": "make-configured",
             "tools.native_cxx.command": "cxx-configured",
             "tests.rtl.smx.trace": False,
+            "tests.rtl.e2e.trace": False,
+            "tests.rtl.trace.verilator_flags": ["--trace-fst", "--trace-structs"],
+            "tests.rtl.trace.dump_file": "dumpfile.fst",
+            "tests.rtl.smx.testbench": "tests/hardware/rtl/tb_GPGPU.sv",
+            "tests.rtl.smx.top": "tb_GPGPU_smx_only",
+            "tests.rtl.smx.plusargs": {},
+            "tests.rtl.e2e.testbench": "tests/hardware/rtl/tb_GPGPU_e2e.sv",
+            "tests.rtl.e2e.top": "tb_GPGPU_e2e",
+            "tests.rtl.e2e.plusargs": {"TEST_ROOT": "cases", "TEST_IDX": 1},
+            "tests.rtl.e2e.sources": ["interfaces/AXI4LiteTop.v"],
+            "tests.rtl.sources.gpgpu": None,
+            "tests.rtl.sources.exclude": ["interfaces"],
+            "tests.rtl.sources.ordered": None,
             "tests.rtl.random.iterations": 100,
             "tests.rtl.random.seed": self.random_seed,
         }[key]
@@ -32,7 +45,8 @@ class StubResolvedConfig:
 def make_repo(tmp_path):
     root = tmp_path / "hardware/rtl/gpgpu"
     for relative in ("constants.svh", "GPGPU.sv", "memory/MemoryInterface.sv",
-                     "memory/Memory.sv", "control/Controller.sv", "sp/Processor.sv"):
+                     "memory/Memory.sv", "control/Controller.sv", "sp/Processor.sv",
+                     "interfaces/AXI4LiteTop.v"):
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("// rtl\n")
@@ -41,6 +55,7 @@ def make_repo(tmp_path):
     case.mkdir(parents=True)
     (case / "program.asm").write_text("addi x1, x0, 1\n")
     (test_root / "tb_GPGPU.sv").write_text("// smx bench\n")
+    (test_root / "tb_GPGPU_e2e.sv").write_text("// e2e bench\n")
     return StubResolvedConfig(tmp_path)
 
 
@@ -71,6 +86,11 @@ def test_current_layout_generation_and_build_dependencies(tmp_path):
     assert run["task_dep"] == ["tests:rtl:generate", "tests:rtl:smx:build"]
     assert run["actions"][0][1][0] == build["targets"]
     assert run["uptodate"] == [False]
+    rtl_root = tmp_path / "hardware/rtl/gpgpu"
+    assert str(rtl_root / "interfaces/AXI4LiteTop.v") not in command
+    e2e = tasks["tests:rtl:e2e:build"]["actions"][0][1][0]
+    assert str(rtl_root / "interfaces/AXI4LiteTop.v") in e2e
+    assert e2e[e2e.index("--top-module") + 1] == "tb_GPGPU_e2e"
 
 
 def test_random_task_omits_seed_argument_when_configured_for_auto_seed(tmp_path):

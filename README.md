@@ -25,18 +25,39 @@ Experimental benches and AXI wrappers are excluded.
 Generated C++, objects, the native `main` binary, `build.log`, and `simulation.log`
 stay under `<paths.build.root>/tests/rtl/smx/`. Runtime uses this directory with
 a `cases` link to the test inputs, so pipeline timing diagram `trace.csv` files
-remain in `tests/hardware/rtl/cases/test*/`. Enabling `tests.rtl.smx.trace`
-combines compile-time `--trace` and runtime `+DUMP`, producing `dumpfile.vcd`
-in the SMX build directory. `--plain` keeps console output without the monitor.
+remain in `tests/hardware/rtl/cases/test*/`. Enabling `tests.rtl.<suite>.trace`
+adds `tests.rtl.trace.verilator_flags` at compile time and passes
+`+DUMP_FILE=<tests.rtl.trace.dump_file>` at runtime; the dump lands in the suite's
+build directory. The default flags (`--trace-fst --trace-structs`) split packed
+structs into named fields and keep enum state names; open the dump with Surfer or
+GTKWave. `--plain` keeps console output without the monitor.
 The build cache tracks sources, headers, compiler command/options, make, C++
 compiler, and core count. Random testing reuses the same compiled executable,
 prints reproducible seeds, logs to `<paths.build.root>/tests/rtl/random/random.log`,
 and preserves the first failing `cases/test999` input.
 
-**E2E is deferred and unverified.** `tests:rtl:e2e:{build,run,all}` fail with an
-explicit diagnostic without executing the E2E bench. The aggregate
-`tests:rtl:{build,run,all}` still request both suites and therefore also fail;
-they have not been silently redefined as SMX-only commands.
+### E2E (AXI4-Lite)
+
+```bash
+./gpgpu run tests:rtl:e2e:all
+./gpgpu --set tests.rtl.e2e.trace=true run tests:rtl:e2e:all
+```
+
+The bench file and top module come from `tests.rtl.e2e.testbench` and
+`tests.rtl.e2e.top`. The bench instantiates the AXI4-Lite wrapper (the IP top
+used on the FPGA) and touches the GPGPU only through AXI4-Lite and the IRQ pin. It first checks the
+CSR map and error responses, plus a host-only DMEM write/readback. Then, for
+each case, it clears DMEM, loads and verifies IMEM, enables the IRQ, writes
+`CONTROL.START`, waits for the completion IRQ, checks `STATUS`/`IRQ_STATUS` and
+the W1C acknowledge, and compares all of DMEM with the expected data file. Register files are
+not host-visible, so they are checked only by the SMX suite. The AXI sources come
+from `tests.rtl.e2e.sources`, because `interfaces/` is excluded from the shared
+source scan. Every bench setting (case root, case prefix and first index, program
+and data file names, clock period, reset length, timeouts, RET encoding, unmapped
+address, INFO version) is a required plusarg taken from `tests.rtl.e2e.plusargs`.
+The bench has no defaults and stops if any is missing; add `TEST_END` to stop
+early. The aggregate
+`tests:rtl:{build,run,all}` tasks cover both suites.
 
 ## Running programs on FPGA
 
