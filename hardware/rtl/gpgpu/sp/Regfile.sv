@@ -3,7 +3,7 @@ module Regfile
 #(
     parameter CORE_ID = 0
 )(
-    input logic clk, rst, i_wen,
+    input logic clk, rst_n, i_wen,
     input word_t i_wdata,
     input reg_addr_t i_addr_a, i_addr_b, i_waddr,
     input logic i_stall,
@@ -14,7 +14,7 @@ module Regfile
 
     //! Read
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             o_reg_a <= '0;
             o_reg_b <= '0;
         end else if (!i_stall && !i_wen) begin
@@ -32,7 +32,7 @@ module Regfile
 
     //! Write
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             for (int unsigned i = 0; i < REG_COUNT; i++) begin
                 if (i == 2) begin
                     data[i] <= STACK_P_INIT;

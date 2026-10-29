@@ -8,7 +8,7 @@ module StreamingProcessor
     parameter int unsigned CORE_ID = 0
 )(
     input logic clk,
-    input logic rst,
+    input logic rst_n,
 
     //! Regfile Read Addresses
     input reg_addr_t i_id_mux_rs1,
@@ -60,7 +60,7 @@ module StreamingProcessor
     Regfile #(
         .CORE_ID(CORE_ID)
     ) regfile (
-        .clk(clk), .rst(rst), .i_wen(memwb.wen), .i_wdata(wb_wdata), 
+        .clk(clk), .rst_n(rst_n), .i_wen(memwb.wen), .i_wdata(wb_wdata), 
         .i_addr_a(i_id_mux_rs1), .i_addr_b(i_id_mux_rs2), .i_waddr(memwb.rd), 
         .o_reg_a(ex_reg_a), .o_reg_b(ex_reg_b), .i_stall(i_stall)
     );
@@ -94,7 +94,7 @@ module StreamingProcessor
     (* dont_touch = `DEBUG *)
     ALU alu (
         .clk(clk),
-        .rst(rst),
+        .rst_n(rst_n),
         .i_operand_a(ex_actual_alu_in_a), 
         .i_operand_b(ex_actual_alu_in_b),
         .i_stall(i_stall),
@@ -111,7 +111,7 @@ module StreamingProcessor
     
 
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             mul1 <= '0;
             mul2 <= '0;
             mul3 <= '0;
@@ -164,7 +164,7 @@ module StreamingProcessor
     //* PIPELINE REGISTER 3: EXECUTE -> MEMORY
     //* =========================================================================
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             exmem <= pipeline_pkg::ex_mem_t'{
                 program_counter: INITIAL_PC,
                 opcode: OP_INVALID,
@@ -214,7 +214,7 @@ module StreamingProcessor
     assign o_core_complete = exmem.core_complete;
 
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             temp_memory <= 'b0;
             mem_response_received <= 'b0;
         end else if (memory_if.rsp_ready && memory_if.rsp_valid) begin
@@ -229,7 +229,7 @@ module StreamingProcessor
     //! PIPELINE REGISTER 4: MEMORY -> WRITE BACK
     //! =========================================================================
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             memwb <= '{
                 program_counter: INITIAL_PC,
                 default: '0

@@ -7,7 +7,7 @@ module StreamingMultiprocessor
     parameter int unsigned NUM_CORES = 32
 )(
     input logic clk,
-    input logic rst,
+    input logic rst_n,
     input logic i_enable,
 
     input word_t i_ifid_instruction,
@@ -32,7 +32,7 @@ module StreamingMultiprocessor
     imem_idx_t instr_idx;
 
     GUCounter #(.BITS(IMEM_AW)) 
-        programCounter (.clk(clk), .i_set_reset({rst, ex_branch_taken}), .i_count_enable(!data_hazard && !stall), .i_count_set(ex_beq_target_idx + 1'b1), .o_count_cur(instr_idx));
+        programCounter (.clk(clk), .i_set_reset({rst_n, ex_branch_taken}), .i_count_enable(!data_hazard && !stall), .i_count_set(ex_beq_target_idx + 1'b1), .o_count_cur(instr_idx));
 
     assign program_counter = {instr_idx, 2'b00};
     assign o_imem_ren = (!data_hazard && !stall) | flush;
@@ -43,7 +43,7 @@ module StreamingMultiprocessor
     //* =========================================================================
     pc_t ifid_program_counter;
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             ifid_program_counter <= INITIAL_PC;
         end else if (stall) begin
             // Retain state during memory stall
@@ -62,7 +62,7 @@ module StreamingMultiprocessor
     logic decode_enabled;
 
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             decode_enabled <= 1'b0;
         end else begin
             decode_enabled <= i_enable;
@@ -81,7 +81,7 @@ module StreamingMultiprocessor
     //* PIPELINE REGISTER 2: INSTRUCTION DECODE -> EXECUTE (Feeds into SP)
     //* =========================================================================
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             idex <= '0;
             idex.program_counter <= INITIAL_PC;
         end else if (stall) begin
@@ -131,7 +131,7 @@ module StreamingMultiprocessor
     // Since execution is lockstep, use Core 0 for shared hazard tracking
     assign ex_branch_taken = sp_feedback[0].branch_taken;
     assign ex_beq_target_idx = sp_feedback[0].branch_target_idx;
-    assign o_kernel_complete = core_complete[0]; //! Assign first one since divergence isnt supported
+    assign o_kernel_complete = core_complete[0]; //! Assign first_n one since divergence isnt supported
 
     logic [NUM_CORES-1:0] mem_response_received;
     logic [NUM_CORES-1:0] mem_is_mem_vec;
@@ -142,7 +142,7 @@ module StreamingMultiprocessor
 
             StreamingProcessor #(.CORE_ID(i)) core (
                 .clk(clk),
-                .rst(rst),
+                .rst_n(rst_n),
 
                 //! Regfile Muxes forward
                 .i_id_mux_rs1(decoded.rs1),

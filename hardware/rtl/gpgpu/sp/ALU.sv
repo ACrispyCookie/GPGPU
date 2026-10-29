@@ -3,7 +3,7 @@ module ALU
     import alu_pkg::*;
 (
     input logic clk,
-    input logic rst,
+    input logic rst_n,
     input word_t i_operand_a,
     input word_t i_operand_b,
     input alu_op_t i_alu_op,
@@ -17,7 +17,7 @@ module ALU
     (* use_dsp = "yes" *) word_t mul_stage3;
 
     always_ff @(posedge clk) begin
-        if (!rst) begin
+        if (!rst_n) begin
             mul_stage1 <= '0;
             mul_stage2 <= '0;
             mul_stage3 <= '0;

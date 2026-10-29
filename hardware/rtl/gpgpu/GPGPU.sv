@@ -97,7 +97,7 @@ module GPGPU
         .NUM_CORES(SP_PER_SM)
     ) smx (
         .clk(clk),
-        .rst(rst_n && !core_reset),
+        .rst_n(rst_n && !core_reset),
         .i_enable(o_core_running),
         .i_ifid_instruction(imem_if.rdata),
         .o_imem_addr(smx_imem_if.addr),
@@ -158,7 +158,7 @@ module GPGPU
         .clk(clk),
         .rst_n(rst_n),
         .abort(core_draining),
-        .memory_bus(dmem_if.responder),
+        .memory_if(dmem_if.responder),
         .idle(memory_quiet)
     );
 
