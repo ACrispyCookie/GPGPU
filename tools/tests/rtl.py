@@ -92,6 +92,19 @@ def _test_cases(cases_root: Path) -> list[Path]:
     )
 
 
+def rtl_range_plusargs(value: str) -> list[str]:
+    """Translate an inclusive directed-test range to the shared bench protocol."""
+    if value == "all":
+        return []
+    match = re.fullmatch(r"([1-9][0-9]*)-([1-9][0-9]*)", value)
+    if match is None:
+        raise ValueError('tests.rtl.range must be "all" or an inclusive range such as "1-10"')
+    first, last = map(int, match.groups())
+    if first > last or last > 2**31 - 1:
+        raise ValueError("tests.rtl.range requires 1 <= start <= end <= 2147483647")
+    return [f"+TEST_IDX={first}", f"+TEST_END={last}"]
+
+
 def run_compilation(command: list[str], cwd: Path, build: Path, make: str) -> None:
     """Build with configured native prerequisites and preserve live build output."""
     build.mkdir(parents=True, exist_ok=True)
@@ -104,6 +117,19 @@ def run_compilation(command: list[str], cwd: Path, build: Path, make: str) -> No
 
 def run_smx(command: list[str], test_root: Path, log: Path) -> None:
     """Keep simulator artifacts under the build root; resolve cases/ via a link."""
+    first = next((int(arg.split("=", 1)[1]) for arg in command if arg.startswith("+TEST_IDX=")), None)
+    last = next((int(arg.split("=", 1)[1]) for arg in command if arg.startswith("+TEST_END=")), None)
+    if first is not None and last is not None:
+        available = {int(case.name.removeprefix("test")) for case in _test_cases(test_root / "cases")}
+        # Check completeness without iterating a potentially huge configured span.
+        selected = sorted(index for index in available if first <= index <= last)
+        expected = first
+        for index in selected:
+            if index != expected:
+                break
+            expected += 1
+        if expected <= last:
+            raise ValueError(f"tests.rtl.range selects missing test{expected}/program.asm")
     runtime = log.parent
     runtime.mkdir(parents=True, exist_ok=True)
     cases = runtime / "cases"
@@ -114,11 +140,12 @@ def run_smx(command: list[str], test_root: Path, log: Path) -> None:
         cases.symlink_to(test_root / "cases", target_is_directory=True)
     run_simulation(command, runtime, log)
 
-def deferred_e2e() -> None:
+def deferred_e2e(range_args: list[str]) -> None:
     raise RuntimeError(
         "E2E RTL simulation is deferred: its testbench has not been migrated to "
         "the current interface. Use tests:rtl:smx:all for SMX-only verification; "
-        "aggregate RTL tasks still require E2E and cannot report full success."
+        "aggregate RTL tasks still require E2E and cannot report full success. "
+        f"Selected range arguments: {' '.join(range_args) or 'all'}"
     )
 
 
@@ -138,6 +165,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     if not isinstance(trace, bool):
         raise TypeError("tests.rtl.smx.trace must be a boolean")
     num_cores = _configured_positive_int(config, "architecture.num_cores")
+    range_args = rtl_range_plusargs(_configured_command(config, "tests.rtl.range"))
     assembler = repo_root / "tools/tests/assembler.py"
     expected_generator = repo_root / "tools/tests/expected_generator.py"
     random_tester = repo_root / "tools/tests/random_tester.py"
@@ -238,7 +266,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     "actions": [
                         (
                             run_smx,
-                            [[str(executable), *(["+DUMP"] if trace else [])], test_root, simulation_log],
+                            [[str(executable), *(["+DUMP"] if trace else []), *range_args], test_root, simulation_log],
                         )
                     ],
                     "task_dep": ["tests:rtl:generate", build_task],
@@ -299,7 +327,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         }
     )
     tasks.extend(
-        {"name": f"tests:rtl:e2e:{stage}", "actions": [(deferred_e2e, [])], "uptodate": [False]}
+        {"name": f"tests:rtl:e2e:{stage}", "actions": [(deferred_e2e, [range_args])], "uptodate": [False]}
         for stage in ("build", "run", "all")
     )
     tasks.extend(

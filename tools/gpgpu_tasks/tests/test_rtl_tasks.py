@@ -20,6 +20,7 @@ class StubResolvedConfig:
             "tools.make.command": "make-configured",
             "tools.native_cxx.command": "cxx-configured",
             "tests.rtl.smx.trace": False,
+            "tests.rtl.range": "all",
             "tests.rtl.random.iterations": 100,
             "tests.rtl.random.seed": self.random_seed,
         }[key]
