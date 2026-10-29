@@ -39,7 +39,7 @@ package pipeline_pkg;
         gpu_pkg::word_t program_counter;
         riscv_pkg::opcode_t opcode;
         gpu_pkg::reg_addr_t rd;
-        logic mul3_valid;
+        logic mul_valid;
         logic wen;
         logic core_complete;
     } ex_mem_t;
@@ -57,9 +57,6 @@ package pipeline_pkg;
     typedef struct packed {
         logic branch_taken;
         gpu_pkg::imem_idx_t branch_target_idx;
-        mul_hazard_t mul1;
-        mul_hazard_t mul2;
-        mul_hazard_t mul3;
     } sp_feedback_t;
 
 endpackage

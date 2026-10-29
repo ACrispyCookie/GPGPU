@@ -4,7 +4,8 @@ module StreamingMultiprocessor
     import alu_pkg::*;
     import pipeline_pkg::*;
 #(
-    parameter int unsigned NUM_CORES = 32
+    parameter int unsigned NUM_CORES = 32,
+    parameter int unsigned MUL_LATENCY = 3
 )(
     input logic clk,
     input logic rst,
@@ -162,18 +163,17 @@ module StreamingMultiprocessor
     
     //! SP wires
     sp_feedback_t sp_feedback [0:NUM_CORES-1];
+    mul_hazard_t sp_mul_hazards [0:NUM_CORES-1][0:MUL_LATENCY-1];
     logic [NUM_CORES-1:0] core_complete;
 
-    HazardUnit hazardUnit (
+    HazardUnit #(.MUL_LATENCY(MUL_LATENCY)) hazardUnit (
         .i_id_rs1(decoded.rs1),
         .i_id_rs2(decoded.rs2),
         .i_idex_rd(idex.rd),
         .i_ex_is_load(sm_ex_is_load),
         .i_ex_is_mul(sm_ex_is_mul),
         .i_id_is_mul(id_is_mul),
-        .i_mul1(sp_feedback[0].mul1),
-        .i_mul2(sp_feedback[0].mul2),
-        .i_mul3(sp_feedback[0].mul3),
+        .i_mul(sp_mul_hazards[0]),
         .i_branch_taken(ex_branch_taken),
         .i_id_instr_type(decoded.instr_type),
         .o_data_hazard(data_hazard),
@@ -233,7 +233,7 @@ module StreamingMultiprocessor
     generate
         for (i = 0; i < NUM_CORES; i = i + 1) begin : cores
 
-            StreamingProcessor #(.CORE_ID(i)) core (
+            StreamingProcessor #(.CORE_ID(i), .MUL_LATENCY(MUL_LATENCY)) core (
                 .clk(clk),
                 .rst(rst),
 
@@ -246,6 +246,7 @@ module StreamingMultiprocessor
 
                 //! Feedback wires Hazard & PC
                 .o_feedback(sp_feedback[i]),
+                .o_mul_hazards(sp_mul_hazards[i]),
 
                 //! Memory connections to Crossbar
                 .memory(sp_mem[i]),

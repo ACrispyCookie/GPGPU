@@ -5,7 +5,8 @@ module GPGPU
     import control_pkg::*;
 #(
     parameter int unsigned SP_PER_SM = 32,
-    parameter string MEMORY_INIT = "empty.mem"
+    parameter string MEMORY_INIT = "empty.mem",
+    parameter int unsigned MUL_LATENCY = 3
 ) (
     input logic clk,
     input logic rst_n,
@@ -105,7 +106,8 @@ module GPGPU
     );
 
     StreamingMultiprocessor #(
-        .NUM_CORES(SP_PER_SM)
+        .NUM_CORES(SP_PER_SM),
+        .MUL_LATENCY(MUL_LATENCY)
     ) smx (
         .clk(clk),
         .rst(rst_n && !core_reset),
