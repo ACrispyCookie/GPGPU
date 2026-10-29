@@ -5,8 +5,7 @@ module StreamingProcessor
     import riscv_pkg::*;
     import pipeline_pkg::*;
 #(
-    parameter int unsigned CORE_ID = 0,
-    parameter int unsigned MUL_LATENCY = 3
+    parameter int unsigned CORE_ID = 0
 )(
     input logic clk,
     input logic rst,
@@ -20,7 +19,6 @@ module StreamingProcessor
 
     //! Hazard and Branch feedback
     output sp_feedback_t o_feedback,
-    output mul_hazard_t o_mul_hazards [0:MUL_LATENCY-1],
 
     //! External Memory Interface
     MemoryInterface.requester memory,
@@ -30,8 +28,7 @@ module StreamingProcessor
 );
 
     ex_mem_t exmem;
-    mul_stage_t mul_in, mul_out;
-    word_t mul_result;
+    mul_stage_t mul3;
 
     //! =========================================================================
     //! STAGE 3: EXECUTE
@@ -93,11 +90,13 @@ module StreamingProcessor
     
     (* dont_touch = `DEBUG *)
     ALU alu (
+        .clk(clk),
+        .rst(rst),
         .i_operand_a(ex_actual_alu_in_a), 
         .i_operand_b(ex_actual_alu_in_b),
+        .i_global_stall(i_global_stall),
         .i_alu_op(i_idex.alu_op), 
-        .i_mul_valid(mul_out.hazard.valid),
-        .i_mul_result(mul_result),
+        .i_mul_valid(mul3.hazard.valid),
         .o_alu_out(ex_alu_out),
         .o_alu_zero(ex_zero)
     );
@@ -105,30 +104,34 @@ module StreamingProcessor
     //? =========================
     //? MUL PIPELINE TRACKING
     //? =========================
-    assign mul_in = '{
-        program_counter: i_idex.program_counter,
-        hazard: '{
-            valid: ex_is_mul && (i_idex.rd != '0),
-            rd: ex_is_mul ? i_idex.rd : '0
-        }
-    };
+    mul_stage_t mul1, mul2;
+    
 
-    (* dont_touch = `DEBUG *)
-    Multiplier #(.LATENCY(MUL_LATENCY)) multiplier (
-        .clk(clk), .rst(rst),
-        .i_operand_a(ex_actual_alu_in_a), .i_operand_b(ex_actual_alu_in_b),
-        .i_global_stall(i_global_stall), .i_stage(mul_in),
-        .o_result(mul_result), .o_stage(mul_out), .o_hazards(o_mul_hazards)
-    );
+    always_ff @(posedge clk) begin
+        if (!rst) begin
+            mul1 <= '0;
+            mul2 <= '0;
+            mul3 <= '0;
+        end else if (i_global_stall) begin
+            // Retain state during memory stall
+        end else begin
+            mul1 <= '{
+                program_counter: i_idex.program_counter,
+                hazard: '{
+                    valid: ex_is_mul && (i_idex.rd != '0),
+                    rd: ex_is_mul ? i_idex.rd : '0
+                }
+            };
+            mul2 <= mul1;
+            mul3 <= mul2;
+        end
+    end
 
     //! Output MUL for Hazard Unit
-    always_comb begin
-        mul_not_ready = ex_is_mul;
-        for (int stage = 1; stage < MUL_LATENCY; stage++) begin
-            mul_not_ready |= o_mul_hazards[stage-1].valid;
-        end
-        mul_not_ready &= !mul_out.hazard.valid;
-    end
+    assign o_feedback.mul1 = mul1.hazard;
+    assign o_feedback.mul2 = mul2.hazard;
+    assign o_feedback.mul3 = mul3.hazard;
+    assign mul_not_ready = (ex_is_mul || mul1.hazard.valid || mul2.hazard.valid) && !mul3.hazard.valid;
 
     assign ex_is_branch = (i_idex.opcode == OP_BEQ);
     assign ex_is_jal = (i_idex.opcode == OP_JAL);
@@ -176,15 +179,15 @@ module StreamingProcessor
             exmem <= '{
                 alu_out: (ex_is_jalr) ? ex_branch_target_addr : ex_alu_out,
                 reg_b: forwarded_rs2,
-                mul_valid: mul_out.hazard.valid,
-                rd: mul_out.hazard.valid ? mul_out.hazard.rd : i_idex.rd,
-                opcode: mul_out.hazard.valid ? OP_R_TYPE : i_idex.opcode,
-                wen: mul_out.hazard.valid ? (mul_out.hazard.rd != '0) : (i_idex.wen && i_idex.rd != '0),
+                mul3_valid: mul3.hazard.valid,
+                rd: mul3.hazard.valid ? mul3.hazard.rd : i_idex.rd,
+                opcode: mul3.hazard.valid ? OP_R_TYPE : i_idex.opcode,
+                wen: mul3.hazard.valid ? (mul3.hazard.rd != '0) : (i_idex.wen && i_idex.rd != '0),
                 core_complete: ex_is_jalr &&
                                (i_idex.rd == '0) &&
                                (i_idex.rs1 == 5'd1) &&
                                (ex_imm_i_type == '0),
-                program_counter: mul_out.hazard.valid ? mul_out.program_counter : i_idex.program_counter
+                program_counter: mul3.hazard.valid ? mul3.program_counter : i_idex.program_counter
             };
         end
     end
@@ -216,7 +219,7 @@ module StreamingProcessor
         end else begin
             memwb <= '{
                 rd: exmem.rd,
-                is_mul: exmem.mul_valid,
+                is_mul: exmem.mul3_valid,
                 is_load: mem_is_load,
                 alu_out: exmem.alu_out,
                 wen: exmem.wen,

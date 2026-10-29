@@ -4,7 +4,6 @@ set PRODUCTION_RTL_SOURCES {
     constants.svh
     memory/MemoryInterface.sv
     sp/ALU.sv
-    sp/Multiplier.sv
     sp/Decoder.sv
     sp/ForwardingUnit.sv
     sp/GUCounter.sv
