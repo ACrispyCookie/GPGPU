@@ -103,7 +103,7 @@ module GPGPU
         .o_imem_addr(smx_imem_if.addr),
         .o_imem_ren(smx_imem_if.ren),
 
-        .memory_bus(smx_dmem_if.requester),
+        .memory_bus(smx_dmem_if),
 
         .o_kernel_complete(core_complete)
     );
@@ -158,7 +158,7 @@ module GPGPU
         .clk(clk),
         .rst_n(rst_n),
         .abort(core_draining),
-        .memory_if(dmem_if.responder),
+        .memory_if(dmem_if),
         .idle(memory_quiet)
     );
 
