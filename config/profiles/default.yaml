@@ -20,7 +20,9 @@ hardware:
     baud: 115200
   # RTL source discovery shared by every consumer (RTL test suites, Vivado IP):
   # all `extensions` files under paths.rtl.sources.gpgpu, minus the consumer's
-  # own `exclude` list (directory or file names). `ordered` files come first,
+  # own `exclude_sources` list. An entry is a bare directory/file name matched
+  # at any depth (e.g. experimental) or a path relative to paths.rtl.sources.gpgpu
+  # (e.g. memory/bram, sp/ALU.sv). `ordered` files come first,
   # in dependency order (a package/interface before any file using its types,
   # including other packages); entries a consumer excludes are dropped.
   # `header_extensions` files are include headers, never compiled on their own.
@@ -48,11 +50,11 @@ hardware:
     peripheral:
       base_address: "0x43C00000"
       range: "0x00010000"
-    # Production IP: hardware.sources minus `exclude` (headers staged first).
+    # Production IP: hardware.sources minus `exclude_sources` (headers first).
     # Keeps interfaces/ (the AXI4-Lite top); drops the deprecated host command
     # processor. `memory_init` (repo-relative) is staged before all HDL; its
     # file name must match the RTL's default $readmemh name.
-    exclude: [experimental, HostControllerProcessor.sv]
+    exclude_sources: [experimental, HostControllerProcessor.sv]
     memory_init: tools/hardware/vivado/ip/empty.mem
   vitis:
     version: "2025.2"
@@ -87,20 +89,20 @@ tests:
     # Directed SMX/E2E test IDs, inclusive: "all" or e.g. "1-10".
     range: "all"
     # Per suite: `testbench` is relative to the repository root, `top` is the
-    # bench's top module, `exclude` drops directories/files from
+    # bench's top module, `exclude_sources` drops directories/files from
     # hardware.sources, `plusargs` are passed to the simulator as +NAME=value.
     smx:
       testbench: tests/hardware/rtl/tb_GPGPU.sv
       top: tb_GPGPU_smx_only
       # No AXI wrapper: the bench instantiates GPGPU directly.
-      exclude: [experimental, interfaces]
+      exclude_sources: [experimental, interfaces]
       plusargs: {}
     e2e:
       testbench: tests/hardware/rtl/tb_GPGPU_e2e.sv
       top: tb_GPGPU_e2e
       # Keeps interfaces/ for the AXI4-Lite top; drops the deprecated host
       # command processor.
-      exclude: [experimental, HostControllerProcessor.sv]
+      exclude_sources: [experimental, HostControllerProcessor.sv]
       # All required by the bench (no defaults in SystemVerilog). +TEST_END
       # is optional and may be added here to stop after a given case.
       plusargs:

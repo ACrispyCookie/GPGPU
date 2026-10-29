@@ -69,15 +69,18 @@ were changed. The range is fixed to this ABI; the base must be a valid aligned
 
 Production sources come from the config, not from a tracked list: the shared
 `hardware.sources` description (extensions, header extensions, compile order)
-under `paths.rtl.sources.gpgpu`, minus `hardware.vivado.exclude` (directory or
-file names; excluded `ordered` entries are dropped). Headers are packaged first
-as include headers, then the `ordered` files, then the rest in path order.
-`hardware.vivado.memory_init` is staged before all of them. Python resolves the
-list and passes it to Vivado as `-memory-init`, `-rtl-sources` and
-`-header-sources`; `production_sources.tcl` only validates those inputs (all
-exist, unique file names, headers among the sources). The default
-`hardware.vivado.memory_init`, `tools/hardware/vivado/ip/empty.mem`, provides explicit 2048-word
-zero initialization for IMEM/DMEM; its file name must match the RTL's default
+under `paths.rtl.sources.gpgpu`, minus `hardware.vivado.exclude_sources` (bare
+directory/file names matched at any depth, or paths relative to the RTL root;
+excluded `ordered` entries are dropped). Headers are packaged first as include
+headers, then the `ordered` files, then the rest in path order.
+`hardware.vivado.memory_init` is staged before all of them. Python writes the
+resolved list to `<ip project>/.gpgpu/sources.tsv` (`<kind>\t<path>` lines) and
+passes only that file as `-sources-manifest`: long or brace-quoted list
+arguments do not survive Vivado's `-tclargs` handling. `production_sources.tcl`
+reads and validates it (all files exist, unique file names, headers among the
+sources). The default `hardware.vivado.memory_init`,
+`tools/hardware/vivado/ip/empty.mem`, provides explicit 2048-word zero
+initialization for IMEM/DMEM; its file name must match the RTL's default
 `$readmemh` name. Project and package copy it beside the flattened
 production files; their stage cwd is owned, never a random repository cwd.
 Board XDC is excluded from the reusable IP.

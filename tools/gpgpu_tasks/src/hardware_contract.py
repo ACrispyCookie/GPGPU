@@ -52,18 +52,28 @@ def rtl_sources(config, exclude):
     """Resolve hardware.sources under paths.rtl.sources.gpgpu for one consumer.
 
     Returns (sources, headers). Sources are every hardware.sources.extensions
-    file not matching *exclude* (directory or file names): hardware.sources.ordered
-    first, minus excluded entries, then the rest in path order. Headers are the
+    file not matching *exclude*: hardware.sources.ordered first, minus excluded
+    entries, then the rest in path order. Headers are the
     hardware.sources.header_extensions files, also minus *exclude*.
+
+    An *exclude* entry is either a bare directory or file name, matched at any
+    depth (``experimental`` drops every experimental/ tree), or a path relative
+    to the RTL root (``memory/bram``, ``sp/ALU.sv``) that drops exactly that
+    file or directory.
     """
     root = rtl_root(config)
-    excluded = set(exclude)
+    entries = [tuple(entry.strip('/').split('/')) for entry in exclude]
+    names = {entry[0] for entry in entries if len(entry) == 1}
+    paths = [entry for entry in entries if len(entry) > 1]
+
+    def excluded(path):
+        parts = path.relative_to(root).parts
+        return bool(names & set(parts)) or any(parts[:len(p)] == p for p in paths)
 
     def collect(extensions):
         return sorted(
             path for path in root.rglob('*')
-            if path.is_file() and path.suffix in extensions
-            and not excluded & set(path.relative_to(root).parts)
+            if path.is_file() and path.suffix in extensions and not excluded(path)
         )
 
     found = collect(string_list(config, 'hardware.sources.extensions'))

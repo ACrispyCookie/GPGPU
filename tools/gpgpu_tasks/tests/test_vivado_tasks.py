@@ -31,10 +31,10 @@ def test_configured_vendor_and_arguments_in_all_commands(tmp_path):
         assert command[0] == 'custom-vivado'
         assert command[command.index('-num-cores') + 1] == '4'
         assert command[command.index('-jobs') + 1] == '2'
-        sources = command[command.index('-rtl-sources') + 1]
-        assert str(ROOT / 'hardware/rtl/gpgpu' / 'GPGPU.sv') in sources and 'experimental' not in sources
-        assert command[command.index('-memory-init') + 1].endswith('.mem')
-        assert command[command.index('-header-sources') + 1]
+        # Source lists travel in a file: list-valued -tclargs get mangled by Vivado.
+        assert command[command.index('-sources-manifest') + 1] == str(
+            tmp_path / 'output/hardware/vivado/gpgpu_ip_dev/.gpgpu/sources.tsv')
+        assert not any('{' in arg or len(arg) > 1024 for arg in command)
         assert command[command.index('-flow-version') + 1] == '2025.2'
         assert Path(command[command.index('-source') + 1]).is_file()
         assert str(tmp_path / 'output') in command[command.index('-project-dir') + 1]
@@ -60,3 +60,44 @@ def test_discovery_has_no_vendor_execution_or_build_mutation(tmp_path, monkeypat
     monkeypatch.setattr('subprocess.Popen', forbidden)
     graph(tmp_path)
     assert not (tmp_path / 'output').exists()
+
+
+def test_vivado_argv_parses_and_manifest_round_trips_through_tcl(tmp_path):
+    """Feed common.tcl the exact -tclargs the flow builds, then read the manifest."""
+    import tkinter
+    from tools.hardware.vivado import tasks as vivado
+    flow = ROOT / 'tools/hardware/vivado'
+    config = resolve_config(ROOT, overrides=[f'paths.build.root={tmp_path / "output"}'])
+    command = {t['name']: t for t in create_tasks(config)}['vivado:ip:create']['actions'][0][1][0]
+    inputs = vivado.production_inputs(config)
+    manifest = command[command.index('-sources-manifest') + 1]
+    vivado.write_source_manifest(manifest, inputs)
+    tcl = tkinter.Tcl()
+    tcl.createcommand('version', lambda *args: command[command.index('-flow-version') + 1])
+    tcl.call('set', 'argv', tuple(command[command.index('-tclargs') + 1:]))
+    tcl.eval(f'source {{{flow / "common.tcl"}}}')
+    tcl.eval(f'source {{{flow / "production_sources.tcl"}}}')
+    memory, sources, headers = tcl.splitlist(tcl.eval('read_source_manifest $SOURCES_MANIFEST'))
+    assert Path(memory) == inputs[0]
+    assert [Path(p) for p in tcl.splitlist(sources)] == inputs[1]
+    assert [Path(p) for p in tcl.splitlist(headers)] == inputs[2]
+
+
+def test_source_manifest_keeps_awkward_paths_intact(tmp_path):
+    import tkinter
+    from tools.hardware.vivado import tasks as vivado
+    odd = tmp_path / 'dir with {braces} and spaces'
+    odd.mkdir()
+    files = [odd / name for name in ('init.mem', 'a b.svh', 'x{y}.sv')]
+    for f in files:
+        f.write_text('')
+    manifest = tmp_path / 'sources.tsv'
+    vivado.write_source_manifest(manifest, (files[0], files[1:], [files[1]]))
+    tcl = tkinter.Tcl()
+    tcl.eval(f'source {{{ROOT / "tools/hardware/vivado/production_sources.tcl"}}}')
+    tcl.call('set', 'manifest', str(manifest))
+    tcl.eval('lassign [read_source_manifest $manifest] m s h')
+    assert tcl.eval('set m') == str(files[0])
+    assert [Path(p) for p in tcl.splitlist(tcl.eval('production_source_paths $m $s $h'))] == files
+    with pytest.raises(ValueError):
+        vivado.write_source_manifest(manifest, (files[0], [tmp_path / 'bad\tname.sv'], []))

@@ -34,6 +34,7 @@ if {[file exists $PROJECT_DIR]} {
     }
 }
 # Resolve every required input before creating any project or copying sources.
+lassign [read_source_manifest $SOURCES_MANIFEST] MEMORY_INIT RTL_SOURCES HEADER_SOURCES
 set inputs [production_source_paths $MEMORY_INIT $RTL_SOURCES $HEADER_SOURCES]
 create_project $PROJECT_NAME $PROJECT_DIR -part $FPGA_PART
 set_property target_language Verilog [current_project]

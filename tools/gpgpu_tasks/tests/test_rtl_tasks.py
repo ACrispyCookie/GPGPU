@@ -28,8 +28,8 @@ class StubResolvedConfig:
             "tests.rtl.e2e.testbench": "tests/hardware/rtl/tb_GPGPU_e2e.sv",
             "tests.rtl.e2e.top": "tb_GPGPU_e2e",
             "tests.rtl.e2e.plusargs": {"TEST_ROOT": "cases", "TEST_IDX": 1},
-            "tests.rtl.smx.exclude": ["interfaces"],
-            "tests.rtl.e2e.exclude": [],
+            "tests.rtl.smx.exclude_sources": ["interfaces"],
+            "tests.rtl.e2e.exclude_sources": [],
             "paths.rtl.sources.gpgpu": "hardware/rtl/gpgpu",
             "hardware.sources.extensions": [".sv", ".v"],
             "hardware.sources.header_extensions": [".svh"],
@@ -162,10 +162,26 @@ def test_smx_runtime_resolves_cases_and_contains_dump(tmp_path):
 def test_excluded_ordered_sources_are_dropped_per_suite(tmp_path):
     config = make_repo(tmp_path)
     lookup = config.get
-    config.get = lambda key: ["memory"] if key == "tests.rtl.smx.exclude" else lookup(key)
+    config.get = lambda key: ["memory"] if key == "tests.rtl.smx.exclude_sources" else lookup(key)
     tasks = tasks_by_name(config)
     rtl_root = tmp_path / "hardware/rtl/gpgpu"
     smx = tasks["tests:rtl:smx:build"]["actions"][0][1][0]
     e2e = tasks["tests:rtl:e2e:build"]["actions"][0][1][0]
     assert str(rtl_root / "memory/MemoryInterface.sv") not in smx
     assert e2e.index(str(rtl_root / "memory/MemoryInterface.sv")) < e2e.index(str(rtl_root / "GPGPU.sv"))
+
+
+@pytest.mark.parametrize("exclude,dropped,kept", [
+    (["memory"], ["memory/MemoryInterface.sv", "memory/Memory.sv"], ["control/Controller.sv"]),
+    (["memory/Memory.sv"], ["memory/Memory.sv"], ["memory/MemoryInterface.sv"]),
+    (["control/"], ["control/Controller.sv"], ["memory/Memory.sv"]),
+    (["Memory.sv"], ["memory/Memory.sv"], ["memory/MemoryInterface.sv"]),
+])
+def test_exclude_sources_accepts_names_and_relative_paths(tmp_path, exclude, dropped, kept):
+    config = make_repo(tmp_path)
+    lookup = config.get
+    config.get = lambda key: exclude if key == "tests.rtl.smx.exclude_sources" else lookup(key)
+    command = tasks_by_name(config)["tests:rtl:smx:build"]["actions"][0][1][0]
+    rtl_root = tmp_path / "hardware/rtl/gpgpu"
+    assert not any(str(rtl_root / path) in command for path in dropped)
+    assert all(str(rtl_root / path) in command for path in kept)

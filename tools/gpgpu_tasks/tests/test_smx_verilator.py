@@ -31,8 +31,8 @@ class Config:
             "tests.rtl.e2e.testbench": "tests/hardware/rtl/tb_GPGPU_e2e.sv",
             "tests.rtl.e2e.top": "tb_GPGPU_e2e",
             "tests.rtl.e2e.plusargs": {"TEST_ROOT": "cases", "TEST_IDX": 1},
-            "tests.rtl.smx.exclude": ["experimental", "interfaces"],
-            "tests.rtl.e2e.exclude": ["experimental", "HostControllerProcessor.sv"],
+            "tests.rtl.smx.exclude_sources": ["experimental", "interfaces"],
+            "tests.rtl.e2e.exclude_sources": ["experimental", "HostControllerProcessor.sv"],
             "paths.rtl.sources.gpgpu": "hardware/rtl/gpgpu",
             "hardware.sources.extensions": [".sv", ".v"],
             "hardware.sources.header_extensions": [".svh"],
@@ -120,7 +120,7 @@ def test_trace_and_random_use_native_executable():
 @pytest.mark.parametrize("key", [
     f"tests.rtl.{suite}.{option}"
     for suite in ("smx", "e2e")
-    for option in ("testbench", "top", "exclude", "plusargs")
+    for option in ("testbench", "top", "exclude_sources", "plusargs")
 ] + ["paths.rtl.sources.gpgpu"]
   + [f"hardware.sources.{option}" for option in ("extensions", "header_extensions", "ordered")]
   + ["tests.rtl.trace.enabled", "tests.rtl.trace.verilator_flags", "tests.rtl.trace.dump_file"])

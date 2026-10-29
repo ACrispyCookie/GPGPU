@@ -19,8 +19,8 @@ from src.hardware_contract import axi_address, identifier, rtl_sources, string_l
 
 def production_inputs(config):
     """(memory_init, sources, headers) for the IP: hardware.sources minus
-    hardware.vivado.exclude, headers first so they precede every consumer."""
-    rtl, headers = rtl_sources(config, string_list(config, 'hardware.vivado.exclude'))
+    hardware.vivado.exclude_sources, headers first so they precede every consumer."""
+    rtl, headers = rtl_sources(config, string_list(config, 'hardware.vivado.exclude_sources'))
     value = config.get('hardware.vivado.memory_init')
     if not isinstance(value, str) or not value:
         raise TypeError('hardware.vivado.memory_init must be a non-empty string')
@@ -35,12 +35,19 @@ def production_inputs(config):
     return memory_init, sources, headers
 
 
-def _tcl_list(paths):
-    """Brace-quote paths as one Tcl list argument (spaces allowed, braces not)."""
-    items = [str(path) for path in paths]
-    if any(set(item) & set('{}\\') for item in items):
-        raise ValueError(f'Unsupported character in Vivado source path: {items}')
-    return ' '.join(f'{{{item}}}' for item in items)
+def write_source_manifest(path, inputs):
+    """Write the IP inputs as `<kind>\t<path>` lines for production_sources.tcl.
+
+    A file, not -tclargs: long or brace-quoted list arguments do not survive
+    Vivado's launcher intact.
+    """
+    memory_init, sources, headers = inputs
+    rows = [('memory', memory_init), *(('source', p) for p in sources), *(('header', p) for p in headers)]
+    if any(set(str(p)) & set('\t\n\r') for _, p in rows):
+        raise ValueError('Vivado source paths must not contain tabs or line breaks')
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(''.join(f'{kind}\t{p}\n' for kind, p in rows))
 
 
 def _managed_project_identity(name, part, kind):
@@ -129,9 +136,10 @@ def run_vivado(command, cwd, project_dir, recreate_project=False):
         raise RuntimeError(f'Vivado stage {stage} failed with exit {status}; see {logs}')
 
 
-def create_ip(command, repo, directory, name, part, version):
+def create_ip(command, repo, directory, name, part, version, inputs):
     _check_tool(command[0], version)
     prepare_managed_project(directory, name, part, 'ip', recreate=True)
+    write_source_manifest(command[command.index('-sources-manifest') + 1], inputs)
     run_vivado(command, repo, directory)
     if not (directory / f'{name}.xpr').is_file():
         raise RuntimeError('IP creation did not produce the development project')
@@ -209,6 +217,7 @@ def package_ip(command, repo, project, ip_repo, inputs):
     if not 1 <= revision <= 0x7FFFFFFF:
         raise ValueError('IP core revision exhausted; cannot refresh same VLNV safely')
     command.extend(['-ip-revision', str(revision)])
+    write_source_manifest(command[command.index('-sources-manifest') + 1], inputs)
     # Existing valid repository remains untouched until a fully validated package exists.
     run_vivado(command, repo, project)
     _validate_package(staging, repo, inputs)
@@ -323,8 +332,7 @@ def create_tasks(config):
     def command(script, ip=False):
         values = {'project-dir': ip_dir if ip else system, 'project-name': ip_name if ip else name,
                   'part': part, 'bd-name': bd_name, 'top': 'gpgpu_axi' if ip else top,
-                  'memory-init': memory_init, 'rtl-sources': _tcl_list(sources),
-                  'header-sources': _tcl_list(headers), 'xdc-file': xdc,
+                  'sources-manifest': ip_dir / '.gpgpu/sources.tsv', 'xdc-file': xdc,
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
                   'num-cores': cores, 'jobs': jobs, 'repo-root': repo, 'ip-repo-dir': ip_repo,
@@ -348,7 +356,7 @@ def create_tasks(config):
                        'clean': []})
 
     stage('vivado:ip:create', 'create_ip_project.tcl', create_ip,
-          [repo, ip_dir, ip_name, part, version], [*source_deps, scripts / 'production_sources.tcl'], [ip_xpr], ip=True)
+          [repo, ip_dir, ip_name, part, version, inputs], [*source_deps, scripts / 'production_sources.tcl'], [ip_xpr], ip=True)
     stage('vivado:ip:build', 'package_ip.tcl', package_ip, [repo, ip_dir, ip_repo, inputs],
           [ip_xpr, *source_deps, scripts / 'production_sources.tcl', scripts / 'package.py', scripts / 'ip/xgui/gpgpu_axi_v1_0.tcl'],
           [component, stamp], ['vivado:ip:create'], ip=True)

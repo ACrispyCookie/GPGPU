@@ -115,7 +115,7 @@ def test_ip_create_preserves_foreign_projects_before_vendor_launch(tmp_path, ide
 def test_production_tcl_itself_rejects_foreign_or_populated_state(tmp_path, conflict):
     """Exercise Tcl's guard directly, without the Python preflight masking it."""
     _, _, arguments, target, _ = launch_setup(tmp_path)
-    command, repo, directory, name, part, _ = arguments
+    command, repo, directory, name, part, _, _ = arguments
     tasks.prepare_managed_project(directory, name, part, 'ip')
     marker = directory / '.gpgpu-managed.json'
     if conflict == 'unmanaged':

@@ -20,6 +20,7 @@ set marker [open $marker_file r]
 set identity [string trim [read $marker]]
 close $marker
 if {$identity ne "gpgpu_axi production project v1"} {error "Invalid production IP project marker"}
+lassign [read_source_manifest $SOURCES_MANIFEST] MEMORY_INIT RTL_SOURCES HEADER_SOURCES
 set inputs [production_source_paths $MEMORY_INIT $RTL_SOURCES $HEADER_SOURCES]
 set memory_name [file tail $MEMORY_INIT]
 set header_names [lmap header $HEADER_SOURCES {file tail $header}]

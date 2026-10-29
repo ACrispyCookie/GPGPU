@@ -17,7 +17,7 @@ used. Python dependencies are initialized by `./gpgpu` (using uv when available)
 
 `architecture.num_cores` controls both expected-memory generation and the compiled
 bench parameter. Each suite compiles every `hardware.sources.extensions` file
-under `paths.rtl.sources.gpgpu`, minus its own `tests.rtl.<suite>.exclude`
+under `paths.rtl.sources.gpgpu`, minus its own `tests.rtl.<suite>.exclude_sources`
 (directory or file names), with `hardware.sources.ordered` first (packages and
 interfaces before their users; excluded entries are dropped).
 `hardware.sources.header_extensions` files are cache dependencies only. The bench and top module come from
@@ -52,7 +52,7 @@ each case, it clears DMEM, loads and verifies IMEM, enables the IRQ, writes
 `CONTROL.START`, waits for the completion IRQ, checks `STATUS`/`IRQ_STATUS` and
 the W1C acknowledge, and compares all of DMEM with the expected data file. Register files are
 not host-visible, so they are checked only by the SMX suite. Its
-`tests.rtl.e2e.exclude` keeps `interfaces/` (the AXI wrapper) that the SMX suite
+`tests.rtl.e2e.exclude_sources` keeps `interfaces/` (the AXI wrapper) that the SMX suite
 excludes. Every bench setting (case root, case prefix and first index, program
 and data file names, clock period, reset length, timeouts, RET encoding, unmapped
 address, INFO version) is a required plusarg taken from `tests.rtl.e2e.plusargs`.

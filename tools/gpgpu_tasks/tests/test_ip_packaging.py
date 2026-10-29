@@ -53,7 +53,7 @@ def test_production_inputs_follow_configuration():
     config = production_config()
     memory, sources, headers = production_inputs()
     root = (ROOT / config.get('paths.rtl.sources.gpgpu')).resolve()
-    excluded = set(config.get('hardware.vivado.exclude'))
+    excluded = set(config.get('hardware.vivado.exclude_sources'))
     ordered = [root / rel for rel in config.get('hardware.sources.ordered')
                if not excluded & set(Path(rel).parts)]
     assert memory == (ROOT / config.get('hardware.vivado.memory_init')).resolve()
@@ -268,14 +268,14 @@ def tcl_driver(tmp_path, script, *, group_types=None, **overrides):
     """Execute real drivers with a Tcl command recorder, not a vendor build."""
     flow = tmp_path/'flow';flow.mkdir(exist_ok=True)
     for name in ('production_sources.tcl', script): shutil.copyfile(FLOW/name,flow/name)
-    from tools.hardware.vivado.tasks import _tcl_list
-    memory_init, sources, headers = production_inputs()
+    from tools.hardware.vivado.tasks import write_source_manifest
+    manifest = tmp_path / 'sources.tsv'
+    write_source_manifest(manifest, production_inputs())
     shutil.copytree(FLOW/'ip',flow/'ip',dirs_exist_ok=True)
     project=tmp_path/'project'; staging=tmp_path/'staging'
     values={'PROJECT_DIR':project,'PROJECT_NAME':'gpgpu_ip_dev','PROJECT_FILE':project/'gpgpu_ip_dev.xpr',
             'TOP_NAME':'gpgpu_axi','FPGA_PART':'xc7z020clg484-1','NUM_CORES':8,'IP_REVISION':7,'FLOW_VERSION':'2025.2',
-            'REPO_ROOT':ROOT,'MEMORY_INIT':memory_init,'RTL_SOURCES':_tcl_list(sources),
-            'HEADER_SOURCES':_tcl_list(headers),'IP_REPO_DIR':staging}
+            'REPO_ROOT':ROOT,'SOURCES_MANIFEST':manifest,'IP_REPO_DIR':staging}
     values.update(overrides)
     (flow/'common.tcl').write_text('\n'.join(f'set {k} {{{v}}}' for k,v in values.items()))
     tcl=tcl_interpreter(); commands=[]

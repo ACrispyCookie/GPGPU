@@ -208,13 +208,13 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     ]
 
     # RTL sources: hardware.sources under paths.rtl.sources.gpgpu, minus each
-    # suite's exclude list (e.g. the SMX build drops the AXI wrapper the E2E
-    # build needs). Headers are only tracked as build dependencies.
+    # suite's exclude_sources list (e.g. the SMX build drops the AXI wrapper
+    # the E2E build needs). Headers are only tracked as build dependencies.
     rtl_src_root = rtl_root(config)
     suite_sources, suite_headers = {}, {}
     for suite in suites:
         suite_sources[suite], suite_headers[suite] = rtl_sources(
-            config, string_list(config, f"tests.rtl.{suite}.exclude")
+            config, string_list(config, f"tests.rtl.{suite}.exclude_sources")
         )
 
     tasks: list[dict[str, Any]] = [

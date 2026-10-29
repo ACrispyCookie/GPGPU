@@ -43,7 +43,7 @@ Example: `software:programs:simple:x86`
 
 • `tests:rtl:generate` — Generate shared test programs and expected-memory files.
 
-• `tests:rtl:e2e:build` — Build the E2E bench (`tests.rtl.e2e.testbench`/`top`) with Verilator over `hardware.sources` minus `tests.rtl.e2e.exclude`.
+• `tests:rtl:e2e:build` — Build the E2E bench (`tests.rtl.e2e.testbench`/`top`) with Verilator over `hardware.sources` minus `tests.rtl.e2e.exclude_sources`.
 
 • `tests:rtl:e2e:run` — Run the end-to-end suite with `tests.rtl.e2e.plusargs`: load, launch, and check DMEM only through AXI4-Lite and the IRQ.
 
