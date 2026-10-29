@@ -87,10 +87,12 @@ def test_portable_export_rejects_legacy_and_normalizes_config(tmp_path):
     text = '''# user.org:user:gpgpu_axi:1.0
 set design_name design_1
 set_property CONFIG.SP_PER_SM {32} [get_bd_cells gpgpu_axi_0]
+set_property -dict [list CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ {35} CONFIG.PCW_USE_M_AXI_GP0 {1}] $processing_system7_0
 assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [get_bd_addr_spaces processing_system7_0/Data] [get_bd_addr_segs gpgpu_axi_0/s00_axi/reg0] -force
 '''
     result = tasks.normalize_exported_tcl(text, ROOT, 'design_1')
     assert '$::NUM_CORES' in result and '$::AXI_BASE' in result and '$::AXI_RANGE' in result
+    assert 'CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ $::FCLK0_MHZ' in result and '{35}' not in result
     assert result == tasks.normalize_exported_tcl(result, ROOT, 'design_1')
     for invalid in ('set design_name design_1\n# axi_gpio', text + '\n# /home/user/path', text + '\n# C:\\Users\\foo'):
         with pytest.raises(RuntimeError):

@@ -90,7 +90,13 @@ Board XDC is excluded from the reusable IP.
 ## System contract
 
 The saved system BD, not its inconsistent neighboring Tcl export, supplied:
-FCLK0 **35 MHz**, DDR **16-bit MT41K256M16 RE-125**, UART0 **EMIO**.
+DDR **16-bit MT41K256M16 RE-125**, UART0 **EMIO**. The fabric clock FCLK0
+(GPGPU, SmartConnect and reset) is configuration-owned:
+`hardware.vivado.fabric_clock_mhz` (default **35 MHz**) is passed as
+`-fclk0-mhz`, used when bootstrapping a new BD and re-applied to a saved BD on
+every `vivado:system:create`, like the core count and AXI aperture. It is the
+requested `PCW_FPGA0_PERIPHERAL_FREQMHZ`; the PS picks the nearest achievable
+frequency from its dividers.
 The system connects PS GP0 -> SmartConnect -> `gpgpu_axi_0/s00_axi`, with
 clock/reset distribution, DDR/FIXED_IO external ports and UART/LED ports.
 `irq` connects through width handling to `IRQ_F2P[0]` (GIC ID 61), matching

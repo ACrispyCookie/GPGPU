@@ -14,7 +14,7 @@ import zipfile
 
 from doit.tools import config_changed
 from src.project_paths import ProjectPaths
-from src.hardware_contract import axi_address, identifier, rtl_sources, string_list, xsa_path
+from src.hardware_contract import axi_address, fabric_clock_mhz, identifier, rtl_sources, string_list, xsa_path
 
 
 IP_TOP = 'gpgpu_axi'
@@ -300,6 +300,7 @@ def normalize_exported_tcl(text, repo_root, bd_name):
     if count != 1:
         raise RuntimeError('Export lacks recognizable design name')
     text = re.sub(r'(CONFIG.SP_PER_SM\s+)\{[^{}]+\}', r'\1$::NUM_CORES', text)
+    text = re.sub(r'(CONFIG.PCW_FPGA0_PERIPHERAL_FREQMHZ\s+)\{[^{}]+\}', r'\1$::FCLK0_MHZ', text)
     text = re.sub(r'(assign_bd_address\s+-offset\s+)\S+(\s+-range\s+)\S+(?=[^\n]*gpgpu_axi_0/s00_axi/reg0)',
                   r'\1$::AXI_BASE\2$::AXI_RANGE', text)
     return '\n'.join(line.rstrip() for line in text.splitlines()).rstrip() + '\n'
@@ -312,6 +313,7 @@ def create_tasks(config):
     inputs = production_inputs(config)
     memory_init, sources, headers = inputs
     base, size = axi_address(config)
+    fclk0 = fabric_clock_mhz(config)
     name = identifier(config, 'hardware.vivado.project_name')
     ip_name = identifier(config, 'hardware.vivado.ip_project_name')
     bd_name = identifier(config, 'hardware.vivado.bd_name')
@@ -349,7 +351,7 @@ def create_tasks(config):
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
                   'num-cores': cores, 'jobs': jobs, 'repo-root': repo, 'ip-repo-dir': ip_repo,
-                  'axi-base': base, 'axi-range': size, 'flow-version': version}
+                  'axi-base': base, 'axi-range': size, 'fclk0-mhz': fclk0, 'flow-version': version}
         return [vendor, '-mode', 'batch', '-source', str(scripts / script), '-tclargs',
                 *(item for key, value in values.items() for item in ('-' + key, str(value)))]
 

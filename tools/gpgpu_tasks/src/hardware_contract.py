@@ -30,6 +30,15 @@ def axi_address(config):
     return f'0x{base:08X}', f'0x{size:08X}'
 
 
+
+def fabric_clock_mhz(config):
+    """Requested PS FCLK_CLK0 frequency; Vivado picks the nearest achievable divider."""
+    value = config.get('hardware.vivado.fabric_clock_mhz')
+    if isinstance(value, bool) or not isinstance(value, (int, float)) or not value > 0:
+        raise ValueError('hardware.vivado.fabric_clock_mhz must be a positive number')
+    return f'{value:g}'
+
+
 def string_list(config, key):
     value = config.get(key)
     if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)) \
