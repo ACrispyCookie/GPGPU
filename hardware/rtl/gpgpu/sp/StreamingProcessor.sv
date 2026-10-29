@@ -205,7 +205,7 @@ module StreamingProcessor
     assign mem_is_mem = mem_is_load | mem_is_store;
 
     assign memory_if.req_valid = !mem_response_received && (mem_is_load | mem_is_store);
-    assign memory_if.req.addr = exmem.alu_out[$clog2(DMEM_ENTRIES)+1 : 2];
+    assign memory_if.req.addr = exmem.alu_out;
     assign memory_if.req.write = mem_is_store;
     assign memory_if.req.wdata = exmem.reg_b;
 

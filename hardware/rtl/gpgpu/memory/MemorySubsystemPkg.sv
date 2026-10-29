@@ -38,8 +38,9 @@ package MemorySubsystemPkg;
         return (a >= base) && (a - base < size);
     endfunction
 
-    function decode_t decode(word_t addr, logic write);
-        decode_t d = '{
+    function automatic decode_t decode(word_t addr, logic write);
+        decode_t d;
+        d = '{
             target: TGT_ERR,
             fault: MEM_OK
         };

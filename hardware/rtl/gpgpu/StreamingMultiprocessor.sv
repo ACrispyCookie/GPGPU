@@ -135,7 +135,7 @@ module StreamingMultiprocessor
 
     logic [NUM_CORES-1:0] mem_response_received;
     logic [NUM_CORES-1:0] mem_is_mem_vec;
-    assign stall = !(&mem_response_received) && mem_is_mem_vec[0];
+    assign stall = !i_enable || (!(&mem_response_received) && mem_is_mem_vec[0]);
 
     generate
         for (genvar i = 0; i < NUM_CORES; i = i + 1) begin : cores

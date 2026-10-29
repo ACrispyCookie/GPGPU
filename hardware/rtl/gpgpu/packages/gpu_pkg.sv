@@ -12,7 +12,7 @@ package gpu_pkg;
     localparam int unsigned FB0_BASE = 'h1800_0000;
     localparam int unsigned FB1_BASE = 'h1840_0000;
     localparam int unsigned TEX_BASE = 'h1880_0000;
-    localparam int unsigned DMEM_SIZE = DMEM_ENTRIES * XLEN;
+    localparam int unsigned DMEM_SIZE = DMEM_ENTRIES * 8;
     localparam int unsigned FB_SIZE = 'h0038_4000;
     localparam int unsigned TEX_SIZE = 'h0080_0000;
 

@@ -46,7 +46,7 @@ module PortController
 
         case (current_state)
             IDLE: begin
-                if (decoded.fault != MEM_OK) begin
+                if (req_valid && decoded.fault != MEM_OK) begin
                     next_state = IMM_RSP;
                 end else if (bram_accept) begin
                     next_state = req.write ? IMM_RSP : BRAM_RD;
