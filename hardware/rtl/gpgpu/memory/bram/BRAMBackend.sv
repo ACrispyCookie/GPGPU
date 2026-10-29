@@ -11,11 +11,11 @@ module BRAMBackend
     //! Requests and ready
     input mem_req_t [N-1:0] req,
     input logic [N-1:0] bram_cand,
-    input logic [N-1:0] bram_claim,
+    input logic [N-1:0] bram_hold,
 
     //! Responses
     output logic [N-1:0] bram_accept,
-    output word_t bram_rdata [N],
+    output word_t bram_rdata [N-1:0],
     output logic bram_busy
 );
 
@@ -31,10 +31,8 @@ module BRAMBackend
     // port contains previous requested result but can be reused on the next cycle (since requester will claim it)
     wire [1:0] available = ~hold;
 
-    always_comb begin
-        for (int i = 0; i < 2; i++) begin
-            hold[i] = busy[i] & ~bram_claim[owners[i]];
-        end
+    for (genvar i = 0; i < 2; i++) begin : hold_ports
+        assign hold[i] = busy[i] & ~bram_hold[owners[i]];
     end
 
     assign bram_busy = busy[0] | busy[1];
@@ -81,7 +79,7 @@ module BRAMBackend
 
     MemoryDualPort #(
         .DEPTH(DMEM_ENTRIES)
-    ) memoryDualPort (
+    ) dataMemory (
         .clk(clk),
         .memory_a(port_a.slave),
         .memory_b(port_b.slave)
@@ -106,13 +104,13 @@ module BRAMBackend
             if (portA_load) begin 
                 busy[0] <= 1'b1; 
                 owners[0] <= portA_idx; 
-            end else if (busy[0] & bram_claim[owners[0]]) 
+            end else if (busy[0] & bram_hold[owners[0]]) 
                 busy[0] <= 1'b0;
             
             if (portB_load) begin 
                 busy[1] <= 1'b1;
                 owners[1] <= portB_idx; 
-            end else if (busy[1] & bram_claim[owners[1]]) 
+            end else if (busy[1] & bram_hold[owners[1]]) 
                 busy[1] <= 1'b0;
         end
     end
@@ -132,8 +130,8 @@ module BRAMBackend
     //& =============================================
 
     //! Steer the delayed BRAM output back to the specific requester that requested it
-    always_comb begin
-        for (int g = 0; g < N; g = g + 1) begin
+    for (genvar g = 0; g < N; g = g + 1) begin : routing
+        always_comb begin
             if (busy[0] && owners[0] == g[IDX_W-1:0]) begin
                 bram_rdata[g] = port_a.rdata;
             end else if (busy[1] && owners[1] == g[IDX_W-1:0]) begin

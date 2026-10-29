@@ -52,8 +52,8 @@ module GPGPU
     MemoryInterface #(.ADDR_WIDTH(IMEM_AW)) smx_imem_if ();
     MemoryInterface #(.ADDR_WIDTH(IMEM_AW)) imem_if ();
     MemoryInterface #(.ADDR_WIDTH(DMEM_AW)) host_dmem_if ();
-    MemorySubsystemInterface [SP_PER_SM] smx_dmem_if ();
-    MemorySubsystemInterface [SP_PER_SM] dmem_if ();
+    MemorySubsystemInterface smx_dmem_if [SP_PER_SM] () ;
+    MemorySubsystemInterface dmem_if [SP_PER_SM] ();
 
     // Instruction memory multiplexing
     assign host_imem_if.rdata = imem_if.rdata;
