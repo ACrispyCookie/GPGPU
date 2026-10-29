@@ -1,42 +1,21 @@
-# Explicit dependency-ordered production manifest. No recursive source discovery.
-# constants is an include; MemoryInterface must precede modules using modports.
-set PRODUCTION_RTL_SOURCES {
-    constants.svh
-    memory/MemoryInterface.sv
-    sp/ALU.sv
-    sp/Decoder.sv
-    sp/ForwardingUnit.sv
-    sp/GUCounter.sv
-    sp/HazardUnit.sv
-    sp/Regfile.sv
-    sp/StreamingProcessor.sv
-    memory/MemoryCrossbarNx2.sv
-    memory/MemoryDualPort.sv
-    memory/MemorySinglePort.sv
-    control/CSRBank.sv
-    control/ExecutionController.sv
-    control/MMIOController.sv
-    packages/alu_pkg.sv
-    packages/control_pkg.sv
-    packages/gpu_pkg.sv
-    packages/pipeline_pkg.sv
-    packages/riscv_pkg.sv
-    StreamingMultiprocessor.sv
-    GPGPU.sv
-    interfaces/AXI4LiteSlave.sv
-    interfaces/AXI4LiteTop.v
-}
-proc production_source_paths {rtl_dir script_dir} {
-    global PRODUCTION_RTL_SOURCES
+# Production inputs are resolved from configuration (hardware.sources minus hardware.vivado.exclude)
+# by the Python flow and passed in as -memory-init, -rtl-sources (compile order)
+# and -header-sources. This file only validates them; it names no sources.
+proc production_source_paths {memory_init rtl_sources header_sources} {
     # Put initialization data before HDL, so filesets end in an HDL source.
-    set memory [file join $script_dir ip empty.mem]
-    if {![file isfile $memory]} {error "Required memory initialization missing: $memory"}
-    set result [list [file normalize $memory]]
-    foreach relative $PRODUCTION_RTL_SOURCES {
-        set path [file normalize [file join $rtl_dir $relative]]
+    set result {}
+    foreach path [list $memory_init {*}$rtl_sources] {
+        set path [file normalize $path]
         if {![file isfile $path]} {error "Required production source missing: $path"}
         lappend result $path
     }
-    # Keep the basename empty.mem: RTL's default $readmemh names this file.
+    # Everything is staged flat into one src/ directory.
+    set names [lmap path $result {file tail $path}]
+    if {[llength [lsort -unique $names]] != [llength $names]} {
+        error "Production sources must have unique file names: $names"
+    }
+    foreach header $header_sources {
+        if {[file normalize $header] ni $result} {error "Header is not a production source: $header"}
+    }
     return $result
 }

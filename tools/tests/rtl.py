@@ -13,6 +13,7 @@ from typing import TYPE_CHECKING, Any, TextIO
 
 from doit.tools import config_changed
 from src.project_paths import ProjectPaths
+from src.hardware_contract import rtl_root, rtl_sources, string_list
 
 if TYPE_CHECKING:
     from config import ResolvedConfig
@@ -85,13 +86,6 @@ def _configured_bool(config: ResolvedConfig, key: str) -> bool:
     if not isinstance(value, bool):
         raise TypeError(f"{key} must be a boolean")
     return value
-
-def _configured_str_list(config: ResolvedConfig, key: str) -> list[str]:
-    value = config.get(key)
-    if isinstance(value, (str, bytes)) or not isinstance(value, (list, tuple)) \
-            or not all(isinstance(item, str) for item in value):
-        raise TypeError(f"{key} must be a list of strings")
-    return list(value)
 
 def _configured_plusargs(config: ResolvedConfig, key: str) -> list[str]:
     """Render a {NAME: value} mapping as simulator +NAME=value arguments."""
@@ -168,7 +162,6 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create generation, build, run, and aggregate tasks for RTL tests."""
     repo_root = config.repo_root
     paths = ProjectPaths.from_config(config)
-    rtl_root = paths.hardware_rtl_gpgpu
     test_root = paths.rtl_tests
     cases_root = test_root / "cases"
     build_root = paths.rtl_test_build
@@ -176,7 +169,8 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     verilator = _configured_command(config, "tools.verilator.command")
     make = _configured_command(config, "tools.make.command")
     cxx = _configured_command(config, "tools.native_cxx.command")
-    trace_flags = _configured_str_list(config, "tests.rtl.trace.verilator_flags")
+    trace = _configured_bool(config, "tests.rtl.trace.enabled")
+    trace_flags = string_list(config, "tests.rtl.trace.verilator_flags")
     dump_file = _configured_command(config, "tests.rtl.trace.dump_file")
     num_cores = _configured_positive_int(config, "architecture.num_cores")
     range_args = rtl_range_plusargs(_configured_command(config, "tests.rtl.range"))
@@ -193,7 +187,6 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     testbench_tops = {
         suite: _configured_command(config, f"tests.rtl.{suite}.top") for suite in suites
     }
-    traces = {suite: _configured_bool(config, f"tests.rtl.{suite}.trace") for suite in suites}
     run_plusargs = {
         suite: _configured_plusargs(config, f"tests.rtl.{suite}.plusargs") for suite in suites
     }
@@ -214,69 +207,15 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         )
     ]
 
-    # ------------------------------------------------------------------
-    # RTL source discovery — config-driven, no hard-coded file names or
-    # directory lists. Verilator reads every file before elaboration and
-    # resolves package/interface ordering itself, so command-line order does
-    # not matter; we just scan a root and drop excluded path segments.
-    #
-    #   tests.rtl.sources.root    : RTL root to scan, relative to repo_root.
-    #                               Unset -> the gpgpu RTL dir (ProjectPaths).
-    #   tests.rtl.sources.exclude : path segments to skip (experimental benches,
-    #                               AXI wrappers, ...). Unset -> the SMX-only
-    #                               build's historical exclusions.
-    # ------------------------------------------------------------------
-    sources_root = config.get("tests.rtl.sources.gpgpu")
-    if sources_root is None:
-        rtl_src_root = rtl_root
-    elif isinstance(sources_root, str):
-        rtl_src_root = (repo_root / sources_root).resolve()
-    else:
-        raise TypeError("tests.rtl.sources.gpgpu must be a string")
-
-    exclude = config.get("tests.rtl.sources.exclude")
-    if exclude is None or isinstance(exclude, (str, bytes)) or not isinstance(exclude, (list, tuple)) \
-            or not all(isinstance(e, str) for e in exclude):
-        raise TypeError("tests.rtl.sources.exclude must be a list of strings")
-    exclude_set = set(exclude)
-
-    # Packages and interfaces must be compiled BEFORE any module that references
-    # their types (Verilator parses in command-line order; a late package gives
-    # "reference ... before declaration"). We put those first automatically by
-    # convention; `tests.rtl.sources.ordered` pins their exact dependency order
-    # (paths relative to root) for the cases where packages reference each other.
-    ordered = config.get("tests.rtl.sources.ordered")
-    if ordered is None:
-        ordered = ()
-    elif isinstance(ordered, (str, bytes)) or not isinstance(ordered, (list, tuple)) \
-            or not all(isinstance(o, str) for o in ordered):
-        raise TypeError("tests.rtl.sources.ordered must be a list of strings")
-    for rel in ordered:
-        if not (rtl_src_root / rel).is_file():
-            raise FileNotFoundError(
-                f"tests.rtl.sources.ordered entry not found: {rtl_src_root / rel}"
-            )
-    rank = {(rtl_src_root / rel).resolve(): i for i, rel in enumerate(ordered)}
-
-    def _included(path: Path) -> bool:
-        return not any(part in exclude_set for part in path.relative_to(rtl_src_root).parts)
-
-    all_sv = sorted(p for p in rtl_src_root.rglob("*.sv") if _included(p))
-    first = sorted((p for p in all_sv if p.resolve() in rank), key=lambda p: rank[p.resolve()])
-    rtl_sources = [*first, *(p for p in all_sv if p.resolve() not in rank)]
-    rtl_headers = sorted(p for p in rtl_src_root.rglob("*.svh") if _included(p))
-
-    # The E2E bench drives the AXI4-Lite top, whose sources live in an excluded
-    # directory (and may be plain .v). They are listed explicitly, relative to
-    # the RTL root, and appended after the shared sources.
-    e2e_extra = _configured_str_list(config, "tests.rtl.e2e.sources")
-    suite_sources = {
-        "smx": rtl_sources,
-        "e2e": [*rtl_sources, *(rtl_src_root / rel for rel in e2e_extra)],
-    }
-    for source in suite_sources["e2e"]:
-        if not source.is_file():
-            raise FileNotFoundError(f"tests.rtl.e2e.sources entry not found: {source}")
+    # RTL sources: hardware.sources under paths.rtl.sources.gpgpu, minus each
+    # suite's exclude list (e.g. the SMX build drops the AXI wrapper the E2E
+    # build needs). Headers are only tracked as build dependencies.
+    rtl_src_root = rtl_root(config)
+    suite_sources, suite_headers = {}, {}
+    for suite in suites:
+        suite_sources[suite], suite_headers[suite] = rtl_sources(
+            config, string_list(config, f"tests.rtl.{suite}.exclude")
+        )
 
     tasks: list[dict[str, Any]] = [
         {
@@ -308,7 +247,6 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         }
     ]
     for suite, testbench in testbenches.items():
-        trace = traces[suite]
         sources = suite_sources[suite]
         suite_build_root = build_root / suite
         executable = suite_build_root / "main"
@@ -331,7 +269,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                     "actions": [
                         (run_compilation, [compile_command, repo_root, suite_build_root, make])
                     ],
-                    "file_dep": [str(testbench), *(str(source) for source in (*sources, *rtl_headers))],
+                    "file_dep": [str(testbench), *(str(source) for source in (*sources, *suite_headers[suite]))],
                     "targets": [str(executable)],
                     "uptodate": [config_changed({"command": compile_command, "make": make})],
                     "clean": True,

@@ -88,7 +88,9 @@ def test_ip_create_runs_production_tcl_in_runner_prepared_directory(tmp_path, ca
     assert (target.parent / '.gpgpu-managed.json').is_file()
     assert (target.parent / '.gpgpu/logs/create_ip_project.console.log').is_file()
     assert (target.parent / '.production-ip-project').is_file()
-    assert len(list((target.parent / 'src').iterdir())) == 20
+    memory_init, sources, _ = tasks.production_inputs(resolve_config(ROOT))
+    assert sorted(p.name for p in (target.parent / 'src').iterdir()) == sorted(
+        p.name for p in (memory_init, *sources))
     invocations = [json.loads(line) for line in trace.read_text().splitlines()]
     assert invocations[0] == ['-version']
     assert '-source' in invocations[1]

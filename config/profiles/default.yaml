@@ -18,6 +18,25 @@ hardware:
   serial:
     port: /dev/ttyACM0
     baud: 115200
+  # RTL source discovery shared by every consumer (RTL test suites, Vivado IP):
+  # all `extensions` files under paths.rtl.sources.gpgpu, minus the consumer's
+  # own `exclude` list (directory or file names). `ordered` files come first,
+  # in dependency order (a package/interface before any file using its types,
+  # including other packages); entries a consumer excludes are dropped.
+  # `header_extensions` files are include headers, never compiled on their own.
+  sources:
+    extensions: [.sv, .v]
+    header_extensions: [.svh]
+    ordered:
+      - packages/gpu_pkg.sv
+      - packages/riscv_pkg.sv
+      - packages/alu_pkg.sv
+      - control/ControlPkg.sv
+      - packages/warp_pkg.sv
+      - packages/pipeline_pkg.sv
+      - memory/MemoryInterface.sv
+      - memory/MemorySubsystemPkg.sv
+      - memory/MemorySubsystemInterface.sv
   vivado:
     ip_project_name: gpgpu_ip_dev
     project_name: gpgpu_system
@@ -29,6 +48,12 @@ hardware:
     peripheral:
       base_address: "0x43C00000"
       range: "0x00010000"
+    # Production IP: hardware.sources minus `exclude` (headers staged first).
+    # Keeps interfaces/ (the AXI4-Lite top); drops the deprecated host command
+    # processor. `memory_init` (repo-relative) is staged before all HDL; its
+    # file name must match the RTL's default $readmemh name.
+    exclude: [experimental, HostControllerProcessor.sv]
+    memory_init: tools/hardware/vivado/ip/empty.mem
   vitis:
     version: "2025.2"
     platform_name: gpgpu_platform
@@ -49,57 +74,33 @@ software:
 
 tests:
   rtl:
-    sources:
-      gpgpu: hardware/rtl/gpgpu
-
-      exclude:
-        - experimental
-        - interfaces
-
-      # Dependency order for the compile-first files (packages + interfaces),
-      # paths relative to `root`. Verilator compiles in command-line order and
-      # needs a package/interface declared before any file that uses its types,
-      # INCLUDING other packages. List them base-first. Files matching the
-      # package/interface convention but not listed here still come first (after
-      # these), then all modules. Adjust to YOUR actual dependency graph — the
-      # error messages name the deps (e.g. gpu_pkg defines word_t used widely).
-      ordered:
-        - packages/gpu_pkg.sv
-        - packages/riscv_pkg.sv
-        - packages/alu_pkg.sv
-        - control/ControlPkg.sv
-        - packages/warp_pkg.sv
-        - packages/pipeline_pkg.sv
-        - memory/MemoryInterface.sv
-        - memory/MemorySubsystemPkg.sv
-        - memory/MemorySubsystemInterface.sv
-    # Applied to a suite when its `trace` is true: extra Verilator flags, and
-    # the dump file passed to the bench as +DUMP_FILE (written in the suite's
+    # Waveform tracing for every suite: `enabled` adds `verilator_flags` at
+    # compile time and passes +DUMP_FILE=<dump_file> (written in the suite's
     # build directory). FST keeps enum names; --trace-structs splits packed
     # structs into named fields.
     trace:
+      enabled: false
       verilator_flags:
         - --trace-fst
         - --trace-structs
       dump_file: dumpfile.fst
-    # Per suite: `testbench` is relative to the repository root, `top` is the
-    # bench's top module, `plusargs` are passed to the simulator as +NAME=value.
     # Directed SMX/E2E test IDs, inclusive: "all" or e.g. "1-10".
     range: "all"
+    # Per suite: `testbench` is relative to the repository root, `top` is the
+    # bench's top module, `exclude` drops directories/files from
+    # hardware.sources, `plusargs` are passed to the simulator as +NAME=value.
     smx:
       testbench: tests/hardware/rtl/tb_GPGPU.sv
       top: tb_GPGPU_smx_only
-      trace: false
+      # No AXI wrapper: the bench instantiates GPGPU directly.
+      exclude: [experimental, interfaces]
       plusargs: {}
     e2e:
       testbench: tests/hardware/rtl/tb_GPGPU_e2e.sv
       top: tb_GPGPU_e2e
-      trace: false
-      # AXI4-Lite top sources (relative to sources.gpgpu), added on top of the
-      # shared sources because `interfaces` is excluded for the SMX build.
-      sources:
-        - interfaces/AXI4LiteSlave.sv
-        - interfaces/AXI4LiteTop.v
+      # Keeps interfaces/ for the AXI4-Lite top; drops the deprecated host
+      # command processor.
+      exclude: [experimental, HostControllerProcessor.sv]
       # All required by the bench (no defaults in SystemVerilog). +TEST_END
       # is optional and may be added here to stop after a given case.
       plusargs:

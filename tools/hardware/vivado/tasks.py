@@ -14,19 +14,33 @@ import zipfile
 
 from doit.tools import config_changed
 from src.project_paths import ProjectPaths
-from src.hardware_contract import axi_address, identifier, xsa_path
+from src.hardware_contract import axi_address, identifier, rtl_sources, string_list, xsa_path
 
 
-def _source_files(root):
-    # Same explicit production manifest as Tcl packaging; no experimental discovery.
-    manifest = Path(__file__).with_name('production_sources.tcl').read_text()
-    match = re.search(r'set PRODUCTION_RTL_SOURCES\s*\{([^}]+)\}', manifest)
-    if match is None:
-        raise ValueError('Invalid production source manifest')
-    relative = [Path(name) for name in match.group(1).split()]
-    if any(p.is_absolute() or '..' in p.parts for p in relative):
-        raise ValueError('Nonportable production manifest')
-    return [root / path for path in relative]
+def production_inputs(config):
+    """(memory_init, sources, headers) for the IP: hardware.sources minus
+    hardware.vivado.exclude, headers first so they precede every consumer."""
+    rtl, headers = rtl_sources(config, string_list(config, 'hardware.vivado.exclude'))
+    value = config.get('hardware.vivado.memory_init')
+    if not isinstance(value, str) or not value:
+        raise TypeError('hardware.vivado.memory_init must be a non-empty string')
+    memory_init = (config.repo_root / value).resolve()
+    if not memory_init.is_file():
+        raise FileNotFoundError(f'hardware.vivado.memory_init not found: {memory_init}')
+    sources = [*headers, *rtl]
+    names = [path.name for path in (memory_init, *sources)]
+    if len(set(names)) != len(names):
+        # Vivado stages every input flat into one src/ directory.
+        raise ValueError('Vivado production inputs resolve to duplicate file names')
+    return memory_init, sources, headers
+
+
+def _tcl_list(paths):
+    """Brace-quote paths as one Tcl list argument (spaces allowed, braces not)."""
+    items = [str(path) for path in paths]
+    if any(set(item) & set('{}\\') for item in items):
+        raise ValueError(f'Unsupported character in Vivado source path: {items}')
+    return ' '.join(f'{{{item}}}' for item in items)
 
 
 def _managed_project_identity(name, part, kind):
@@ -133,7 +147,7 @@ def _tree_hash(directory):
     return result
 
 
-def _validate_package(directory, repo):
+def _validate_package(directory, repo, inputs):
     # Task factories may be loaded from another checkout in the same CLI process;
     # don't reuse the first checkout's cached namespace helper/RTL manifest.
     import importlib.util
@@ -143,18 +157,17 @@ def _validate_package(directory, repo):
         raise RuntimeError(f'Cannot load package validator: {path}')
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
-    module.validate_package(directory)
+    module.validate_package(directory, *inputs)
 
 
-def package_current(directory, repo=None):
+def package_current(directory, repo, inputs):
     """A completion stamp is valid only for the complete, independently valid tree."""
-    repo = repo or Path(__file__).resolve().parents[3]
     directory = Path(directory)
     try:
         metadata = json.loads((directory / '.gpgpu-package.json').read_text())
         if metadata.get('revision', 0) < 1 or metadata.get('files') != _tree_hash(directory):
             return False
-        _validate_package(directory, repo)
+        _validate_package(directory, repo, inputs)
     except (OSError, ValueError, RuntimeError):
         return False
     return True
@@ -181,7 +194,7 @@ class GeneratedIPChanged:
         return values.get('generated_ip') == self.state()
 
 
-def package_ip(command, repo, project, ip_repo):
+def package_ip(command, repo, project, ip_repo, inputs):
     project = Path(project)
     ip_repo = Path(ip_repo)
     complete = ip_repo / '.gpgpu-package.json'
@@ -198,7 +211,7 @@ def package_ip(command, repo, project, ip_repo):
     command.extend(['-ip-revision', str(revision)])
     # Existing valid repository remains untouched until a fully validated package exists.
     run_vivado(command, repo, project)
-    _validate_package(staging, repo)
+    _validate_package(staging, repo, inputs)
     (staging / '.gpgpu-package.json').write_text(json.dumps(
         {'revision': revision, 'files': _tree_hash(staging)}, sort_keys=True, indent=2) + '\n')
     previous = None
@@ -222,9 +235,9 @@ def saved_current(directory, name, part, bd):
     return True
 
 
-def create_system(command, repo, directory, name, part, bd, wrapper, ip_repo, version):
+def create_system(command, repo, directory, name, part, bd, wrapper, ip_repo, version, inputs):
     _check_tool(command[0], version)
-    _validate_package(ip_repo, repo)
+    _validate_package(ip_repo, repo, inputs)
     if not (ip_repo / '.gpgpu-package.json').is_file():
         raise RuntimeError('IP repository has no completed managed publication')
     prepare_managed_project(directory, name, part, 'system')
@@ -274,7 +287,8 @@ def create_tasks(config):
     paths = ProjectPaths.from_config(config)
     repo = config.repo_root
     scripts = repo / 'tools/hardware/vivado'
-    sources = _source_files(paths.hardware_rtl_gpgpu)
+    inputs = production_inputs(config)
+    memory_init, sources, headers = inputs
     base, size = axi_address(config)
     name = identifier(config, 'hardware.vivado.project_name')
     ip_name = identifier(config, 'hardware.vivado.ip_project_name')
@@ -309,7 +323,8 @@ def create_tasks(config):
     def command(script, ip=False):
         values = {'project-dir': ip_dir if ip else system, 'project-name': ip_name if ip else name,
                   'part': part, 'bd-name': bd_name, 'top': 'gpgpu_axi' if ip else top,
-                  'rtl-dir': paths.hardware_rtl_gpgpu, 'xdc-file': xdc,
+                  'memory-init': memory_init, 'rtl-sources': _tcl_list(sources),
+                  'header-sources': _tcl_list(headers), 'xdc-file': xdc,
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
                   'num-cores': cores, 'jobs': jobs, 'repo-root': repo, 'ip-repo-dir': ip_repo,
@@ -321,7 +336,7 @@ def create_tasks(config):
     executable = shutil.which(vendor)
     if executable:
         shared.append(str(Path(executable).resolve()))
-    source_deps = list(map(str, sources)) + [str(scripts / 'ip/empty.mem')]
+    source_deps = [str(memory_init), *map(str, sources)]
     result = []
 
     def stage(task, script, action, args, deps, targets, parent=(), ip=False):
@@ -334,12 +349,12 @@ def create_tasks(config):
 
     stage('vivado:ip:create', 'create_ip_project.tcl', create_ip,
           [repo, ip_dir, ip_name, part, version], [*source_deps, scripts / 'production_sources.tcl'], [ip_xpr], ip=True)
-    stage('vivado:ip:build', 'package_ip.tcl', package_ip, [repo, ip_dir, ip_repo],
+    stage('vivado:ip:build', 'package_ip.tcl', package_ip, [repo, ip_dir, ip_repo, inputs],
           [ip_xpr, *source_deps, scripts / 'production_sources.tcl', scripts / 'package.py', scripts / 'ip/xgui/gpgpu_axi_v1_0.tcl'],
           [component, stamp], ['vivado:ip:create'], ip=True)
-    result[-1]['uptodate'].append((package_current, [ip_repo, repo]))
+    result[-1]['uptodate'].append((package_current, [ip_repo, repo, inputs]))
     stage('vivado:system:create', 'create_system.tcl', create_system,
-          [repo, system, name, part, bd, wrapper, ip_repo, version],
+          [repo, system, name, part, bd, wrapper, ip_repo, version, inputs],
           [component, stamp, scripts / 'create_block_design.tcl', scripts / 'configure_block_design.tcl', xdc],
           [sys_xpr, bd, wrapper], ['vivado:ip:build'])
     result[-1]['uptodate'].append((saved_current, [system, name, part, bd]))

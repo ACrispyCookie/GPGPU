@@ -98,11 +98,13 @@ assign_bd_address -offset 0x43C00000 -range 0x00010000 -target_address_space [ge
 
 
 def test_package_publication_manifest_detects_partial_or_tampered_cache(tmp_path):
-    assert tasks.package_current(tmp_path) is False
+    from config import resolve_config
+    inputs = tasks.production_inputs(resolve_config(ROOT))
+    assert tasks.package_current(tmp_path, ROOT, inputs) is False
     data = tmp_path / 'src.sv'; data.write_text('one')
     (tmp_path / '.gpgpu-package.json').write_text(__import__('json').dumps({
         'revision': 1, 'files': tasks._tree_hash(tmp_path)}))
-    assert tasks.package_current(tmp_path) is False  # Hash alone isn't IP-XACT proof.
+    assert tasks.package_current(tmp_path, ROOT, inputs) is False  # Hash alone isn't IP-XACT proof.
 
 
 def test_generated_ip_callback_tracks_content_after_first_creation(tmp_path):

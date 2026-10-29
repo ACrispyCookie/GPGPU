@@ -12,20 +12,21 @@ used. Python dependencies are initialized by `./gpgpu` (using uv when available)
 ./gpgpu run tests:rtl:smx:run
 ./gpgpu run tests:rtl:smx:all
 ./gpgpu --set tests.rtl.random.iterations=3 --set tests.rtl.random.seed=12345 run tests:rtl:random
-./gpgpu --set tests.rtl.smx.trace=true run tests:rtl:smx:all
+./gpgpu --set tests.rtl.trace.enabled=true run tests:rtl:smx:all
 ```
 
 `architecture.num_cores` controls both expected-memory generation and the compiled
-bench parameter. Compilation selects production `.sv` sources from
-`hardware/rtl/gpgpu` and its `control/`, `memory/`, and `sp/` directories, with
-`MemoryInterface.sv` before consumers; `.svh` headers are cache dependencies.
-The top module is `tb_GPGPU_smx_only` in `tests/hardware/rtl/tb_GPGPU.sv`.
-Experimental benches and AXI wrappers are excluded.
+bench parameter. Each suite compiles every `hardware.sources.extensions` file
+under `paths.rtl.sources.gpgpu`, minus its own `tests.rtl.<suite>.exclude`
+(directory or file names), with `hardware.sources.ordered` first (packages and
+interfaces before their users; excluded entries are dropped).
+`hardware.sources.header_extensions` files are cache dependencies only. The bench and top module come from
+`tests.rtl.<suite>.testbench` and `tests.rtl.<suite>.top`.
 
 Generated C++, objects, the native `main` binary, `build.log`, and `simulation.log`
 stay under `<paths.build.root>/tests/rtl/smx/`. Runtime uses this directory with
 a `cases` link to the test inputs, so pipeline timing diagram `trace.csv` files
-remain in `tests/hardware/rtl/cases/test*/`. Enabling `tests.rtl.<suite>.trace`
+remain in `tests/hardware/rtl/cases/test*/`. Enabling `tests.rtl.trace.enabled` (all suites)
 adds `tests.rtl.trace.verilator_flags` at compile time and passes
 `+DUMP_FILE=<tests.rtl.trace.dump_file>` at runtime; the dump lands in the suite's
 build directory. The default flags (`--trace-fst --trace-structs`) split packed
@@ -40,7 +41,7 @@ and preserves the first failing `cases/test999` input.
 
 ```bash
 ./gpgpu run tests:rtl:e2e:all
-./gpgpu --set tests.rtl.e2e.trace=true run tests:rtl:e2e:all
+./gpgpu --set tests.rtl.trace.enabled=true run tests:rtl:e2e:all
 ```
 
 The bench file and top module come from `tests.rtl.e2e.testbench` and
@@ -50,9 +51,9 @@ CSR map and error responses, plus a host-only DMEM write/readback. Then, for
 each case, it clears DMEM, loads and verifies IMEM, enables the IRQ, writes
 `CONTROL.START`, waits for the completion IRQ, checks `STATUS`/`IRQ_STATUS` and
 the W1C acknowledge, and compares all of DMEM with the expected data file. Register files are
-not host-visible, so they are checked only by the SMX suite. The AXI sources come
-from `tests.rtl.e2e.sources`, because `interfaces/` is excluded from the shared
-source scan. Every bench setting (case root, case prefix and first index, program
+not host-visible, so they are checked only by the SMX suite. Its
+`tests.rtl.e2e.exclude` keeps `interfaces/` (the AXI wrapper) that the SMX suite
+excludes. Every bench setting (case root, case prefix and first index, program
 and data file names, clock period, reset length, timeouts, RET encoding, unmapped
 address, INFO version) is a required plusarg taken from `tests.rtl.e2e.plusargs`.
 The bench has no defaults and stops if any is missing; add `TEST_END` to stop

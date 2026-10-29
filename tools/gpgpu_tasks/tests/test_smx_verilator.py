@@ -22,8 +22,7 @@ class Config:
             "tools.verilator.command": self.verilator,
             "tools.make.command": "configured-make",
             "tools.native_cxx.command": "configured-cxx",
-            "tests.rtl.smx.trace": self.trace,
-            "tests.rtl.e2e.trace": self.trace,
+            "tests.rtl.trace.enabled": self.trace,
             "tests.rtl.trace.verilator_flags": ["--trace-fst", "--trace-structs"],
             "tests.rtl.trace.dump_file": "dumpfile.fst",
             "tests.rtl.smx.testbench": "tests/hardware/rtl/tb_GPGPU.sv",
@@ -32,10 +31,12 @@ class Config:
             "tests.rtl.e2e.testbench": "tests/hardware/rtl/tb_GPGPU_e2e.sv",
             "tests.rtl.e2e.top": "tb_GPGPU_e2e",
             "tests.rtl.e2e.plusargs": {"TEST_ROOT": "cases", "TEST_IDX": 1},
-            "tests.rtl.e2e.sources": ["interfaces/AXI4LiteSlave.sv", "interfaces/AXI4LiteTop.v"],
-            "tests.rtl.sources.gpgpu": "hardware/rtl/gpgpu",
-            "tests.rtl.sources.exclude": ["experimental", "interfaces"],
-            "tests.rtl.sources.ordered": [
+            "tests.rtl.smx.exclude": ["experimental", "interfaces"],
+            "tests.rtl.e2e.exclude": ["experimental", "HostControllerProcessor.sv"],
+            "paths.rtl.sources.gpgpu": "hardware/rtl/gpgpu",
+            "hardware.sources.extensions": [".sv", ".v"],
+            "hardware.sources.header_extensions": [".svh"],
+            "hardware.sources.ordered": [
                 "packages/gpu_pkg.sv",
                 "control/ControlPkg.sv",
                 "memory/MemoryInterface.sv",
@@ -119,8 +120,10 @@ def test_trace_and_random_use_native_executable():
 @pytest.mark.parametrize("key", [
     f"tests.rtl.{suite}.{option}"
     for suite in ("smx", "e2e")
-    for option in ("testbench", "top", "trace", "plusargs")
-] + ["tests.rtl.e2e.sources", "tests.rtl.trace.verilator_flags", "tests.rtl.trace.dump_file"])
+    for option in ("testbench", "top", "exclude", "plusargs")
+] + ["paths.rtl.sources.gpgpu"]
+  + [f"hardware.sources.{option}" for option in ("extensions", "header_extensions", "ordered")]
+  + ["tests.rtl.trace.enabled", "tests.rtl.trace.verilator_flags", "tests.rtl.trace.dump_file"])
 def test_suite_settings_have_no_fallback(key):
     config = Config(Path(__file__).resolve().parents[3])
     lookup = config.get

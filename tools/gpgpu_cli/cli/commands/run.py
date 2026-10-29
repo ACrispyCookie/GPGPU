@@ -43,17 +43,17 @@ Example: `software:programs:simple:x86`
 
 • `tests:rtl:generate` — Generate shared test programs and expected-memory files.
 
-• `tests:rtl:e2e:build` — Build the E2E bench (`tests.rtl.e2e.testbench`/`top`) with Verilator, adding `tests.rtl.e2e.sources`.
+• `tests:rtl:e2e:build` — Build the E2E bench (`tests.rtl.e2e.testbench`/`top`) with Verilator over `hardware.sources` minus `tests.rtl.e2e.exclude`.
 
 • `tests:rtl:e2e:run` — Run the end-to-end suite with `tests.rtl.e2e.plusargs`: load, launch, and check DMEM only through AXI4-Lite and the IRQ.
 
-• `tests:rtl:e2e:all` — Generate, build, and run the E2E suite. Set `tests.rtl.e2e.trace=true` to trace with `tests.rtl.trace.*`.
+• `tests:rtl:e2e:all` — Generate, build, and run the E2E suite. Set `tests.rtl.trace.enabled=true` for waveform tracing.
 
 • `tests:rtl:smx:build` — Build `tb_GPGPU.sv` with Verilator (top `tb_GPGPU_smx_only`).
 
 • `tests:rtl:smx:run` — Run the SMX-only suite with direct memory access.
 
-• `tests:rtl:smx:all` — Generate, build, and run the SMX-only suite. Set `tests.rtl.smx.trace=true` to trace with `tests.rtl.trace.*`.
+• `tests:rtl:smx:all` — Generate, build, and run the SMX-only suite. Set `tests.rtl.trace.enabled=true` for waveform tracing.
 
 • `tests:rtl:random` — Generate and run reproducible random programs on the SMX testbench. Configure the run with `tests.rtl.random.iterations` and `tests.rtl.random.seed`.
 

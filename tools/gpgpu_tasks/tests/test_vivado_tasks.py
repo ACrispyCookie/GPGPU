@@ -31,7 +31,10 @@ def test_configured_vendor_and_arguments_in_all_commands(tmp_path):
         assert command[0] == 'custom-vivado'
         assert command[command.index('-num-cores') + 1] == '4'
         assert command[command.index('-jobs') + 1] == '2'
-        assert command[command.index('-rtl-dir') + 1] == str(ROOT / 'hardware/rtl/gpgpu')
+        sources = command[command.index('-rtl-sources') + 1]
+        assert str(ROOT / 'hardware/rtl/gpgpu' / 'GPGPU.sv') in sources and 'experimental' not in sources
+        assert command[command.index('-memory-init') + 1].endswith('.mem')
+        assert command[command.index('-header-sources') + 1]
         assert command[command.index('-flow-version') + 1] == '2025.2'
         assert Path(command[command.index('-source') + 1]).is_file()
         assert str(tmp_path / 'output') in command[command.index('-project-dir') + 1]

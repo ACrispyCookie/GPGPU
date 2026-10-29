@@ -67,10 +67,18 @@ were changed. The range is fixed to this ABI; the base must be a valid aligned
 `GPGPU_BASEADDR` (see [Vitis flow](vitis-cli.md)). Core count maps to
 `CONFIG.SP_PER_SM` and the IP user-to-HDL/XGUI parameter, never a second setting.
 
-The tracked `production_sources.tcl` lists only production root/control/memory/
-sp/interfaces files, with `constants.svh` and `MemoryInterface.sv` first.
-`tools/hardware/vivado/ip/empty.mem` provides explicit 2048-word zero
-initialization for IMEM/DMEM. Project and package copy it beside the flattened
+Production sources come from the config, not from a tracked list: the shared
+`hardware.sources` description (extensions, header extensions, compile order)
+under `paths.rtl.sources.gpgpu`, minus `hardware.vivado.exclude` (directory or
+file names; excluded `ordered` entries are dropped). Headers are packaged first
+as include headers, then the `ordered` files, then the rest in path order.
+`hardware.vivado.memory_init` is staged before all of them. Python resolves the
+list and passes it to Vivado as `-memory-init`, `-rtl-sources` and
+`-header-sources`; `production_sources.tcl` only validates those inputs (all
+exist, unique file names, headers among the sources). The default
+`hardware.vivado.memory_init`, `tools/hardware/vivado/ip/empty.mem`, provides explicit 2048-word
+zero initialization for IMEM/DMEM; its file name must match the RTL's default
+`$readmemh` name. Project and package copy it beside the flattened
 production files; their stage cwd is owned, never a random repository cwd.
 Board XDC is excluded from the reusable IP.
 

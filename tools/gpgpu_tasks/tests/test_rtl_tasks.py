@@ -19,8 +19,7 @@ class StubResolvedConfig:
             "tools.verilator.command": "verilator-configured",
             "tools.make.command": "make-configured",
             "tools.native_cxx.command": "cxx-configured",
-            "tests.rtl.smx.trace": False,
-            "tests.rtl.e2e.trace": False,
+            "tests.rtl.trace.enabled": False,
             "tests.rtl.trace.verilator_flags": ["--trace-fst", "--trace-structs"],
             "tests.rtl.trace.dump_file": "dumpfile.fst",
             "tests.rtl.smx.testbench": "tests/hardware/rtl/tb_GPGPU.sv",
@@ -29,10 +28,12 @@ class StubResolvedConfig:
             "tests.rtl.e2e.testbench": "tests/hardware/rtl/tb_GPGPU_e2e.sv",
             "tests.rtl.e2e.top": "tb_GPGPU_e2e",
             "tests.rtl.e2e.plusargs": {"TEST_ROOT": "cases", "TEST_IDX": 1},
-            "tests.rtl.e2e.sources": ["interfaces/AXI4LiteTop.v"],
-            "tests.rtl.sources.gpgpu": None,
-            "tests.rtl.sources.exclude": ["interfaces"],
-            "tests.rtl.sources.ordered": None,
+            "tests.rtl.smx.exclude": ["interfaces"],
+            "tests.rtl.e2e.exclude": [],
+            "paths.rtl.sources.gpgpu": "hardware/rtl/gpgpu",
+            "hardware.sources.extensions": [".sv", ".v"],
+            "hardware.sources.header_extensions": [".svh"],
+            "hardware.sources.ordered": ["memory/MemoryInterface.sv"],
             "tests.rtl.range": "all",
             "tests.rtl.random.iterations": 100,
             "tests.rtl.random.seed": self.random_seed,
@@ -156,3 +157,15 @@ def test_smx_runtime_resolves_cases_and_contains_dump(tmp_path):
     rtl.run_smx([sys.executable, "-c", "from pathlib import Path; assert Path('cases/test1/program.mem').is_file(); Path('dumpfile.vcd').write_text('trace'); print('[SUCCESS]')"], test_root, log)
     assert (log.parent / "dumpfile.vcd").read_text() == "trace"
     assert (log.parent / "cases").resolve() == test_root / "cases"
+
+
+def test_excluded_ordered_sources_are_dropped_per_suite(tmp_path):
+    config = make_repo(tmp_path)
+    lookup = config.get
+    config.get = lambda key: ["memory"] if key == "tests.rtl.smx.exclude" else lookup(key)
+    tasks = tasks_by_name(config)
+    rtl_root = tmp_path / "hardware/rtl/gpgpu"
+    smx = tasks["tests:rtl:smx:build"]["actions"][0][1][0]
+    e2e = tasks["tests:rtl:e2e:build"]["actions"][0][1][0]
+    assert str(rtl_root / "memory/MemoryInterface.sv") not in smx
+    assert e2e.index(str(rtl_root / "memory/MemoryInterface.sv")) < e2e.index(str(rtl_root / "GPGPU.sv"))
