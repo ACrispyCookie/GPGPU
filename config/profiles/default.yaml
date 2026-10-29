@@ -84,6 +84,8 @@ tests:
       dump_file: dumpfile.fst
     # Per suite: `testbench` is relative to the repository root, `top` is the
     # bench's top module, `plusargs` are passed to the simulator as +NAME=value.
+    # Directed SMX/E2E test IDs, inclusive: "all" or e.g. "1-10".
+    range: "all"
     smx:
       testbench: tests/hardware/rtl/tb_GPGPU.sv
       top: tb_GPGPU_smx_only

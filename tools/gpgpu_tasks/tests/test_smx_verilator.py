@@ -42,6 +42,7 @@ class Config:
                 "memory/MemorySubsystemPkg.sv",
                 "memory/MemorySubsystemInterface.sv",
             ],
+            "tests.rtl.range": "all",
             "tests.rtl.random.iterations": 2,
             "tests.rtl.random.seed": 12345,
         }[key]

@@ -116,6 +116,19 @@ def _test_cases(cases_root: Path) -> list[Path]:
     )
 
 
+def rtl_range_plusargs(value: str) -> list[str]:
+    """Translate an inclusive directed-test range to the shared bench protocol."""
+    if value == "all":
+        return []
+    match = re.fullmatch(r"([1-9][0-9]*)-([1-9][0-9]*)", value)
+    if match is None:
+        raise ValueError('tests.rtl.range must be "all" or an inclusive range such as "1-10"')
+    first, last = map(int, match.groups())
+    if first > last or last > 2**31 - 1:
+        raise ValueError("tests.rtl.range requires 1 <= start <= end <= 2147483647")
+    return [f"+TEST_IDX={first}", f"+TEST_END={last}"]
+
+
 def run_compilation(command: list[str], cwd: Path, build: Path, make: str) -> None:
     """Build with configured native prerequisites and preserve live build output."""
     build.mkdir(parents=True, exist_ok=True)
@@ -128,6 +141,19 @@ def run_compilation(command: list[str], cwd: Path, build: Path, make: str) -> No
 
 def run_smx(command: list[str], test_root: Path, log: Path) -> None:
     """Keep simulator artifacts under the build root; resolve cases/ via a link."""
+    first = next((int(arg.split("=", 1)[1]) for arg in command if arg.startswith("+TEST_IDX=")), None)
+    last = next((int(arg.split("=", 1)[1]) for arg in command if arg.startswith("+TEST_END=")), None)
+    if first is not None and last is not None:
+        available = {int(case.name.removeprefix("test")) for case in _test_cases(test_root / "cases")}
+        # Check completeness without iterating a potentially huge configured span.
+        selected = sorted(index for index in available if first <= index <= last)
+        expected = first
+        for index in selected:
+            if index != expected:
+                break
+            expected += 1
+        if expected <= last:
+            raise ValueError(f"tests.rtl.range selects missing test{expected}/program.asm")
     runtime = log.parent
     runtime.mkdir(parents=True, exist_ok=True)
     cases = runtime / "cases"
@@ -153,6 +179,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     trace_flags = _configured_str_list(config, "tests.rtl.trace.verilator_flags")
     dump_file = _configured_command(config, "tests.rtl.trace.dump_file")
     num_cores = _configured_positive_int(config, "architecture.num_cores")
+    range_args = rtl_range_plusargs(_configured_command(config, "tests.rtl.range"))
     assembler = repo_root / "tools/tests/assembler.py"
     expected_generator = repo_root / "tools/tests/expected_generator.py"
     random_tester = repo_root / "tools/tests/random_tester.py"
@@ -319,6 +346,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
                                     str(executable),
                                     *run_plusargs[suite],
                                     *([f"+DUMP_FILE={dump_file}"] if trace else []),
+                                    *range_args
                                 ],
                                 test_root,
                                 simulation_log,

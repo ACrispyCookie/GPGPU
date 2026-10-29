@@ -33,6 +33,7 @@ class StubResolvedConfig:
             "tests.rtl.sources.gpgpu": None,
             "tests.rtl.sources.exclude": ["interfaces"],
             "tests.rtl.sources.ordered": None,
+            "tests.rtl.range": "all",
             "tests.rtl.random.iterations": 100,
             "tests.rtl.random.seed": self.random_seed,
         }[key]
