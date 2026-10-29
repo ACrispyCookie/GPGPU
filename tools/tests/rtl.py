@@ -121,7 +121,6 @@ def deferred_e2e() -> None:
         "aggregate RTL tasks still require E2E and cannot report full success."
     )
 
-
 def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
     """Create generation, build, run, and aggregate tasks for RTL tests."""
     repo_root = config.repo_root
@@ -158,21 +157,59 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
             *(case / f"regfile_c{core}.mem" for core in range(num_cores)),
         )
     ]
-    # Select production SMX units only, excluding experimental benches and AXI wrappers.
-    source_dirs = [rtl_root, *(rtl_root / name for name in ("control", "memory", "sp"))]
-    sv_packages = [
-        rtl_root / "packages" / name
-        for name in (
-            "gpu_pkg.sv", "riscv_pkg.sv", "alu_pkg.sv",
-            "control_pkg.sv", "warp_pkg.sv", "pipeline_pkg.sv",
-        )
-    ]
-    memory_interface = rtl_root / "memory/MemoryInterface.sv"
-    rtl_sources = [*sv_packages, memory_interface, *sorted(
-        source for directory in source_dirs for source in directory.glob("*.sv")
-        if source != memory_interface
-    )]
-    rtl_headers = sorted(header for directory in source_dirs for header in directory.glob("*.svh"))
+
+    # ------------------------------------------------------------------
+    # RTL source discovery — config-driven, no hard-coded file names or
+    # directory lists. Verilator reads every file before elaboration and
+    # resolves package/interface ordering itself, so command-line order does
+    # not matter; we just scan a root and drop excluded path segments.
+    #
+    #   tests.rtl.sources.root    : RTL root to scan, relative to repo_root.
+    #                               Unset -> the gpgpu RTL dir (ProjectPaths).
+    #   tests.rtl.sources.exclude : path segments to skip (experimental benches,
+    #                               AXI wrappers, ...). Unset -> the SMX-only
+    #                               build's historical exclusions.
+    # ------------------------------------------------------------------
+    sources_root = config.get("tests.rtl.sources.gpgpu")
+    if sources_root is None:
+        rtl_src_root = rtl_root
+    elif isinstance(sources_root, str):
+        rtl_src_root = (repo_root / sources_root).resolve()
+    else:
+        raise TypeError("tests.rtl.sources.gpgpu must be a string")
+
+    exclude = config.get("tests.rtl.sources.exclude")
+    if exclude is None or isinstance(exclude, (str, bytes)) or not isinstance(exclude, (list, tuple)) \
+            or not all(isinstance(e, str) for e in exclude):
+        raise TypeError("tests.rtl.sources.exclude must be a list of strings")
+    exclude_set = set(exclude)
+
+    # Packages and interfaces must be compiled BEFORE any module that references
+    # their types (Verilator parses in command-line order; a late package gives
+    # "reference ... before declaration"). We put those first automatically by
+    # convention; `tests.rtl.sources.ordered` pins their exact dependency order
+    # (paths relative to root) for the cases where packages reference each other.
+    ordered = config.get("tests.rtl.sources.ordered")
+    if ordered is None:
+        ordered = ()
+    elif isinstance(ordered, (str, bytes)) or not isinstance(ordered, (list, tuple)) \
+            or not all(isinstance(o, str) for o in ordered):
+        raise TypeError("tests.rtl.sources.ordered must be a list of strings")
+    for rel in ordered:
+        if not (rtl_src_root / rel).is_file():
+            raise FileNotFoundError(
+                f"tests.rtl.sources.ordered entry not found: {rtl_src_root / rel}"
+            )
+    rank = {(rtl_src_root / rel).resolve(): i for i, rel in enumerate(ordered)}
+
+    def _included(path: Path) -> bool:
+        return not any(part in exclude_set for part in path.relative_to(rtl_src_root).parts)
+
+    all_sv = sorted(p for p in rtl_src_root.rglob("*.sv") if _included(p))
+    first = sorted((p for p in all_sv if p.resolve() in rank), key=lambda p: rank[p.resolve()])
+    rtl_sources = [*first, *(p for p in all_sv if p.resolve() not in rank)]
+    rtl_headers = sorted(p for p in rtl_src_root.rglob("*.svh") if _included(p))
+
     tasks: list[dict[str, Any]] = [
         {
             "name": "tests:rtl:generate",
@@ -214,7 +251,7 @@ def create_tasks(config: ResolvedConfig) -> list[dict[str, Any]]:
         run_task = f"tests:rtl:{suite}:run"
         compile_command = [
             verilator, "--binary", "--timing", "--assert", "--autoflush", "-Wno-fatal",
-            "--timescale", "1ns/1ps", f"-I{rtl_root}", "-DSIM",
+            "--timescale", "1ns/1ps", f"-I{rtl_src_root}", "-DSIM",
             "--top-module", testbench_tops[suite], f"-GNUM_CORES={num_cores}",
             "--Mdir", str(suite_build_root), "-o", executable.name,
             "-MAKEFLAGS", shlex.join([f"CXX={cxx}", f"LINK={cxx}"]),

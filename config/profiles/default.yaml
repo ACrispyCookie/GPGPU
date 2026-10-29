@@ -49,6 +49,30 @@ software:
 
 tests:
   rtl:
+    sources:
+      gpgpu: hardware/rtl/gpgpu
+
+      exclude:
+        - experimental
+        - interfaces
+
+      # Dependency order for the compile-first files (packages + interfaces),
+      # paths relative to `root`. Verilator compiles in command-line order and
+      # needs a package/interface declared before any file that uses its types,
+      # INCLUDING other packages. List them base-first. Files matching the
+      # package/interface convention but not listed here still come first (after
+      # these), then all modules. Adjust to YOUR actual dependency graph — the
+      # error messages name the deps (e.g. gpu_pkg defines word_t used widely).
+      ordered:
+        - packages/gpu_pkg.sv
+        - packages/riscv_pkg.sv
+        - packages/alu_pkg.sv
+        - control/ControlPkg.sv
+        - packages/warp_pkg.sv
+        - packages/pipeline_pkg.sv
+        - memory/MemoryInterface.sv
+        - memory/MemorySubsystemPkg.sv
+        - memory/MemorySubsystemInterface.sv
     smx:
       # Compile with --trace and run with +DUMP; VCD stays in build/tests/rtl/smx.
       trace: false
@@ -58,6 +82,9 @@ tests:
       seed: 0
 
 paths:
+  rtl:
+    sources:
+      gpgpu: hardware/rtl/gpgpu
   build:
     root: build
 

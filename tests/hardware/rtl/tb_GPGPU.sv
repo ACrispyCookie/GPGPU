@@ -118,7 +118,7 @@ module tb_GPGPU_smx_only
                 UUT.instructionMemory.data[i] = 32'b0;
 
             for (i = 0; i < DMEM_ENTRIES; i = i + 1)
-                UUT.dataMemory.data[i] = 32'b0;
+                UUT.memory_subsystem.bramBackend.dataMemory.data[i] = 32'b0;
 
             // Load IMEM directly, like old SMX test
             $readmemh(prog_file, UUT.instructionMemory.data);
@@ -211,9 +211,9 @@ module tb_GPGPU_smx_only
             data_errors = 0;
 
             for (i = 0; i < DMEM_ENTRIES; i = i + 1) begin
-                if (UUT.dataMemory.data[i] !== expected_data[i]) begin
+                if (UUT.memory_subsystem.bramBackend.dataMemory.data[i] !== expected_data[i]) begin
                     $display("  [ERROR] Data memory Address %0d: Expected %h, Found %h",
-                             i, expected_data[i], UUT.dataMemory.data[i]);
+                             i, expected_data[i], UUT.memory_subsystem.bramBackend.dataMemory.data[i]);
                     data_errors = data_errors + 1;
                 end
             end
