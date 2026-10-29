@@ -49,6 +49,8 @@ software:
 
 tests:
   rtl:
+    # Directed SMX/E2E test IDs, inclusive: "all" or e.g. "1-10".
+    range: "all"
     smx:
       # Compile with --trace and run with +DUMP; VCD stays in build/tests/rtl/smx.
       trace: false

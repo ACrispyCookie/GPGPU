@@ -23,6 +23,7 @@ class Config:
             "tools.make.command": "configured-make",
             "tools.native_cxx.command": "configured-cxx",
             "tests.rtl.smx.trace": self.trace,
+            "tests.rtl.range": "all",
             "tests.rtl.random.iterations": 2,
             "tests.rtl.random.seed": 12345,
         }[key]

@@ -33,6 +33,20 @@ compiler, and core count. Random testing reuses the same compiled executable,
 prints reproducible seeds, logs to `<paths.build.root>/tests/rtl/random/random.log`,
 and preserves the first failing `cases/test999` input.
 
+`tests.rtl.range` in `config/profiles/default.yaml` selects directed SMX/E2E
+case IDs: `"all"` (default) or an inclusive range such as `"1-10"` or `"5-5"`.
+For a one-off selection:
+
+```bash
+./gpgpu --set tests.rtl.range=1-10 run tests:rtl:smx:all
+```
+
+The range is passed as `+TEST_IDX` / `+TEST_END` at runtime, without recompiling
+the bench. Explicit ranges with missing case sources fail before simulation.
+Shared input generation still prepares all cases; random testing is unaffected.
+E2E commands resolve the same range and show its arguments in their deferred
+diagnostic; this does not enable or migrate the old E2E bench.
+
 **E2E is deferred and unverified.** `tests:rtl:e2e:{build,run,all}` fail with an
 explicit diagnostic without executing the E2E bench. The aggregate
 `tests:rtl:{build,run,all}` still request both suites and therefore also fail;
