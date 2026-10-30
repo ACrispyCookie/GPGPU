@@ -129,14 +129,22 @@ def tool_current(command, required):
     return True
 
 
+def stage_logs(project_dir):
+    return Path(project_dir) / '.gpgpu/logs'
+
+
+def stage_name(command):
+    return Path(command[command.index('-source') + 1]).stem
+
+
 def run_vivado(command, cwd, project_dir, recreate_project=False):
     # Compatibility argument intentionally does not permit recursive deletion.
     if recreate_project:
         raise RuntimeError('Use managed snapshot recreation, not recursive deletion')
     project_dir = Path(project_dir)
-    logs = project_dir / '.gpgpu/logs'
+    logs = stage_logs(project_dir)
     logs.mkdir(parents=True, exist_ok=True)
-    stage = Path(command[command.index('-source') + 1]).stem
+    stage = stage_name(command)
     argv = [*command[:1], '-log', str(logs / f'{stage}.log'), '-journal', str(logs / f'{stage}.jou'), *command[1:]]
     process = subprocess.Popen(argv, cwd=project_dir, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
     with (logs / f'{stage}.console.log').open('w') as log:
@@ -277,8 +285,37 @@ def create_system(command, repo, directory, name, part, bd, wrapper, ip_repo, ve
     validate_saved_bd(bd, bd.stem, part)
 
 
-def run_stage(command, repo, directory, target, xsa=False):
-    run_vivado(command, repo, directory)
+# launch_runs executes every run (synth_1, each out-of-context IP synthesis,
+# impl_1) in its own Vivado process; the stage log only records the launch.
+RUN_LOG_SUFFIXES = {'.log', '.vds', '.vdi', '.rpt'}
+
+
+def collect_run_logs(directory, stage, runs):
+    """Copy the logs and reports of the stage's runs to logs/<stage>/<run>/.
+
+    Replaced on every stage execution so it only holds the runs behind the
+    current results. Runs reused unchanged (e.g. up-to-date out-of-context IP
+    synthesis) keep the logs from when they ran.
+    """
+    destination = stage_logs(directory) / stage
+    if destination.exists():
+        shutil.rmtree(destination)
+    run_dirs = {d for pattern in runs for d in Path(directory).glob(f'*.runs/{pattern}') if d.is_dir()}
+    for run in sorted(run_dirs):
+        for path in sorted(run.iterdir()):
+            if path.is_file() and path.suffix in RUN_LOG_SUFFIXES:
+                target = destination / run.name / path.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+
+
+def run_stage(command, repo, directory, target, xsa=False, runs=()):
+    try:
+        run_vivado(command, repo, directory)
+    finally:
+        # Also on failure: the run logs hold the actual error
+        if runs:
+            collect_run_logs(directory, stage_name(command), runs)
     if not target.is_file() or target.stat().st_size == 0:
         raise RuntimeError(f'Vivado did not produce {target}')
     if xsa:
@@ -371,9 +408,9 @@ def create_tasks(config):
     source_deps = [str(memory_init), *map(str, sources)]
     result = []
 
-    def stage(task, script, action, args, deps, targets, parent=(), ip=False):
+    def stage(task, script, action, args, deps, targets, parent=(), ip=False, kwargs=None):
         cmd = command(script, ip)
-        result.append({'name': task, 'actions': [(action, [cmd, *args])], 'task_dep': list(parent),
+        result.append({'name': task, 'actions': [(action, [cmd, *args], kwargs or {})], 'task_dep': list(parent),
                        'file_dep': [*shared, str(scripts / script), *map(str, deps)],
                        'targets': list(map(str, targets)),
                        'uptodate': [config_changed({'command': cmd}), (tool_current, [vendor, version])],
@@ -391,12 +428,13 @@ def create_tasks(config):
           [sys_xpr, bd, wrapper], ['vivado:ip:build'])
     result[-1]['uptodate'].append((saved_current, [system, name, part, bd]))
     stage('vivado:system:_synthesis', 'synthesis.tcl', run_stage, [repo, system, synth],
-          [sys_xpr, bd, wrapper, stamp, xdc, *source_deps], [synth], ['vivado:system:create'])
+          [sys_xpr, bd, wrapper, stamp, xdc, *source_deps], [synth], ['vivado:system:create'],
+          kwargs={'runs': ['*synth_1']})
     result[-1]['uptodate'].append(GeneratedIPChanged(system))
     stage('vivado:system:_implementation', 'implementation.tcl', run_stage, [repo, system, route],
-          [synth, bd, xdc], [route], ['vivado:system:_synthesis'])
+          [synth, bd, xdc], [route], ['vivado:system:_synthesis'], kwargs={'runs': ['impl_1']})
     stage('vivado:system:_bitstream', 'bitstream.tcl', run_stage, [repo, system, bit],
-          [route, xdc], [bit], ['vivado:system:_implementation'])
+          [route, xdc], [bit], ['vivado:system:_implementation'], kwargs={'runs': ['impl_1']})
     stage('vivado:system:build', 'export_hardware.tcl', run_stage, [repo, system, xsa, True],
           [bit, route, bd, stamp], [xsa], ['vivado:system:_bitstream'])
     return result

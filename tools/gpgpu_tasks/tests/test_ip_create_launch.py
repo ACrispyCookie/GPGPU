@@ -66,7 +66,8 @@ def launch_setup(tmp_path):
     ])
     definitions = tasks.create_tasks(config)
     stage = next(task for task in definitions if task['name'] == 'vivado:ip:create')
-    action, arguments = stage['actions'][0]
+    action, arguments, kwargs = stage['actions'][0]
+    assert kwargs == {}
     return definitions, action, arguments, Path(stage['targets'][0]), trace
 
 

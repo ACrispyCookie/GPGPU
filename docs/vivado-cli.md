@@ -162,7 +162,13 @@ skip completed stages. IP package failure blocks system and Vitis execution.
 The XSA must include `.bit`, `.hwh`, `ps7_init.tcl` and `ps7_init.c` before the
 stage succeeds. Vivado logs/journals/streamed console logs stay in the managed
 project's `.gpgpu/logs/`; the existing JSON-backed CLI monitor also records each
-stage. Use `--plain` for plain live output. The FPGA artifact contract is unchanged:
+stage. Use `--plain` for plain live output. `launch_runs` executes each run in
+its own process, so the synthesis, implementation and bitstream stages also copy
+their runs' logs and reports (`runme.log`, `.vds`, `.vdi`, `.rpt`) to
+`.gpgpu/logs/<stage>/<run>/`: `synth_1` plus every out-of-context IP
+synthesis run (`*synth_1`), or `impl_1`. The copy is refreshed on every
+execution, also when Vivado fails; reused out-of-context runs keep the logs from
+when they ran. The FPGA artifact contract is unchanged:
 published bitstream, Vitis `ps7_init.tcl`, and host ELF. No reference artifact is
 accepted as evidence of a newly completed vendor build.
 
