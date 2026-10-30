@@ -1,4 +1,5 @@
 #include "gpgpu_driver.h"
+#include "benchmark.h"
 
 #include "xparameters.h"
 #include "xil_printf.h"
@@ -253,6 +254,8 @@ static void print_help(void) {
     xil_printf("  loaddmem_bin <offset> <count>\r\n");
     xil_printf("  --------- CONTROL ---------\r\n");
     xil_printf("  run\r\n");
+    xil_printf("  --------- BENCHMARK ---------\r\n");
+    xil_printf("  bench_nbody <steps> <repetitions>\r\n");
     xil_printf("\r\n");
 }
 
@@ -428,7 +431,21 @@ int main(void) {
             load_dmem_binary(offset, count);
 
         } else if (strcmp(cmd, "run") == 0) {
-            gpgpu_start_and_wait();
+            xil_printf("Starting core...\r\n");
+            if (gpgpu_start_and_wait() == 0)
+                xil_printf("Core entered idle state.\r\n");
+
+        } else if (strcmp(cmd, "bench_nbody") == 0) {
+            u32 steps, repetitions;
+
+            arg1 = strtok(NULL, " \t");
+            arg2 = strtok(NULL, " \t");
+            if (parse_count(arg1, &steps) != 0 || parse_count(arg2, &repetitions) != 0) {
+                xil_printf("Usage: bench_nbody <steps> <repetitions>\r\n");
+                continue;
+            }
+
+            benchmark_nbody(steps, repetitions);
 
         } else {
             xil_printf("Unknown command: %s\r\n", cmd);
