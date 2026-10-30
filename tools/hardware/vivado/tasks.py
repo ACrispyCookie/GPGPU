@@ -327,6 +327,13 @@ def create_tasks(config):
     jobs = config.get('hardware.vivado.jobs')
     if any(not isinstance(v, int) or isinstance(v, bool) or v < 1 for v in (cores, jobs)):
         raise ValueError('architecture.num_cores and hardware.vivado.jobs must be positive integers')
+    post_route_phys_opt = config.get('hardware.vivado.post_route_phys_opt.enabled')
+    if not isinstance(post_route_phys_opt, bool):
+        raise ValueError('hardware.vivado.post_route_phys_opt.enabled must be true or false')
+    # Vivado validates the directive name itself; this only keeps it a plain word.
+    phys_opt_directive = config.get('hardware.vivado.post_route_phys_opt.directive')
+    if not isinstance(phys_opt_directive, str) or not re.fullmatch(r'[A-Za-z][A-Za-z0-9_]*', phys_opt_directive):
+        raise ValueError('hardware.vivado.post_route_phys_opt.directive must be a Vivado directive name')
     ip_dir = paths.vivado / ip_name
     system = paths.vivado / name
     ip_repo = paths.vivado / 'ip_repo'
@@ -351,7 +358,9 @@ def create_tasks(config):
                   'bitstream-dir': paths.bitstream, 'platform-dir': paths.platform,
                   'xsa-name': xsa.stem, 'export-file': system / '.gpgpu/export.raw.tcl',
                   'num-cores': cores, 'jobs': jobs, 'repo-root': repo, 'ip-repo-dir': ip_repo,
-                  'axi-base': base, 'axi-range': size, 'fclk0-mhz': fclk0, 'flow-version': version}
+                  'axi-base': base, 'axi-range': size, 'fclk0-mhz': fclk0,
+                  'post-route-phys-opt': int(post_route_phys_opt),
+                  'post-route-phys-opt-directive': phys_opt_directive, 'flow-version': version}
         return [vendor, '-mode', 'batch', '-source', str(scripts / script), '-tclargs',
                 *(item for key, value in values.items() for item in ('-' + key, str(value)))]
 

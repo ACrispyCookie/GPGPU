@@ -28,6 +28,12 @@ vivado:ip:create
   bitstream and fixed, bitstream-inclusive XSA export. Internal staged tasks
   retain checkpoints, jobs and stage diagnostics; a failed bitstream retry does
   not delete routed state. Required OOC IP synthesis belongs here.
+  `hardware.vivado.post_route_phys_opt.{enabled,directive}` (passed as
+  `-post-route-phys-opt` / `-post-route-phys-opt-directive`) set `impl_1`'s
+  post-route `phys_opt_design` step and its `-directive` on every
+  implementation run. The run is launched without `-to_step` (which has no name
+  for that step), so it executes every enabled step before `write_bitstream`;
+  bitstream and XSA use its result.
 
 The former GPIO/module-reference tasks are not part of this pipeline.
 
@@ -54,6 +60,10 @@ hardware:
     xsa_name: gpgpu_platform
     version: "2025.2"
     jobs: 6
+    fabric_clock_mhz: 35
+    post_route_phys_opt:
+      enabled: true
+      directive: AggressiveExplore
     peripheral:
       base_address: "0x43C00000"
       range: "0x00010000"

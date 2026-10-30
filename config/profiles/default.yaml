@@ -51,6 +51,12 @@ hardware:
     # interconnect and reset; Vivado selects the nearest achievable frequency.
     # Applied to new and saved block designs on vivado:system:create.
     fabric_clock_mhz: 35
+    # phys_opt_design after routing in impl_1, with its -directive (e.g.
+    # AggressiveExplore, Explore, AlternateFlowWithRetiming, Default). Applied
+    # on every implementation run, so disabling it also takes effect.
+    post_route_phys_opt:
+      enabled: true
+      directive: AggressiveExplore
     peripheral:
       base_address: "0x43C00000"
       range: "0x00010000"
