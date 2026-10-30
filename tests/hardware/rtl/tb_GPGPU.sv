@@ -50,7 +50,8 @@ module tb_GPGPU_smx_only
 
     always #(`CLOCK_PERIOD / 2) clk_in = ~clk_in;
 
-    // Register probes through new hierarchy
+    // Register probes: the regfile storage is LUTRAM without reset, so a
+    // register not written since reset holds its reset value instead
     wire [31:0] core_reg_probes [0:NUM_CORES-1][0:31];
 
     genvar cg, rg;
@@ -58,7 +59,8 @@ module tb_GPGPU_smx_only
         for (cg = 0; cg < NUM_CORES; cg = cg + 1) begin : probe_cores
             for (rg = 0; rg < 32; rg = rg + 1) begin : probe_regs
                 assign core_reg_probes[cg][rg] =
-                    UUT.smx.cores[cg].core.regfile.data[rg];
+                    UUT.smx.cores[cg].core.regfile.written[rg] ? UUT.smx.cores[cg].core.regfile.ram[rg] :
+                    reg_reset_value(rg, cg);
             end
         end
     endgenerate

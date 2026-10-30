@@ -26,4 +26,11 @@ package gpu_pkg;
     typedef logic [XLEN-1:0] word_t;
     typedef logic [(XLEN/8)-1:0] strb_t;
     typedef logic [IMEM_AW-1:0] imem_idx_t;
+
+    // Register value after reset
+    function automatic word_t reg_reset_value(reg_addr_t addr, int unsigned core_id);
+        if (addr == 2) return STACK_P_INIT;
+        if (addr == TXD_REGISTER) return word_t'(core_id);
+        return '0;
+    endfunction
 endpackage
