@@ -208,6 +208,7 @@ module StreamingProcessor
     assign memory_if.req.addr = exmem.alu_out;
     assign memory_if.req.write = mem_is_store;
     assign memory_if.req.wdata = exmem.reg_b;
+    assign memory_if.req.wstrb = '1; // Full word write currently
 
     assign memory_if.rsp_ready = 'b1;
 

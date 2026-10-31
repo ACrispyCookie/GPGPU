@@ -12,8 +12,6 @@ interface MemoryInterface #(
     logic wen;
     logic [DATA_WIDTH-1:0] wdata;
     logic [DATA_WIDTH-1:0] rdata;
-    logic grant;
-    logic rvalid;
 
     modport master (output addr, ren, wen, wdata, input rdata);
     modport slave  (input addr, ren, wen, wdata, output rdata);

@@ -34,11 +34,10 @@ module GPGPU
 
     // Control for the core
     core_state_t core_state;
-    logic core_complete, core_draining, complete_pulse, stopped;
+    logic core_complete, complete_pulse, stopped;
     logic control_start, control_stop, clear_stopped;
     logic core_reset, memory_quiet;
     assign core_reset = core_state == CORE_RESET;
-    assign core_draining = core_state == CORE_DRAINING;
     assign o_core_idle = core_state == CORE_IDLE;
     assign o_core_running = core_state == CORE_RUNNING;
 
@@ -131,7 +130,9 @@ module GPGPU
     assign host_req.wstrb = host_dmem_if.wen ? '1 : '0; // host does full-word writes
     assign host_dmem_if.rdata = dmem_if[0].rsp.rdata;
  
-    // Slot 0: SMX while running, host while idle. Slots 1..N-1: SMX only.
+    // Slot 0: SMX while not idle, host while idle. Slots 1..N-1: SMX only.
+    // While idle the subsystem belongs to the host: SMX requests left over
+    // from a STOP are not presented, so they can never be claimed.
     for (genvar i = 0; i < SP_PER_SM; i++) begin : g_req_mux
         if (i == 0) begin : g_host_shared
             // request side
@@ -143,7 +144,7 @@ module GPGPU
             assign smx_dmem_if[0].rsp_valid = o_core_running & dmem_if[0].rsp_valid;
             assign smx_dmem_if[0].rsp = dmem_if[0].rsp;
         end else begin : g_core_only
-            assign dmem_if[i].req_valid = smx_dmem_if[i].req_valid;
+            assign dmem_if[i].req_valid = ~o_core_idle & smx_dmem_if[i].req_valid;
             assign dmem_if[i].req = smx_dmem_if[i].req;
             assign dmem_if[i].rsp_ready = smx_dmem_if[i].rsp_ready;
             assign smx_dmem_if[i].req_ready = dmem_if[i].req_ready;
@@ -153,13 +154,13 @@ module GPGPU
     end
 
     MemorySubsystem #(
-        .N(SP_PER_SM)
+        .NUM_REQ(SP_PER_SM)
     ) memory_subsystem (
         .clk(clk),
         .rst_n(rst_n),
-        .abort(core_draining),
+        .i_req_enable(o_core_running | o_core_idle),
         .memory_if(dmem_if),
-        .idle(memory_quiet)
+        .o_idle(memory_quiet)
     );
 
 endmodule

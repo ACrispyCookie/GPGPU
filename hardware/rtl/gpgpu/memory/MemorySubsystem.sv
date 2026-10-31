@@ -2,67 +2,84 @@ import gpu_pkg::*;
 import MemorySubsystemPkg::*;
 
 module MemorySubsystem #(
-    parameter int unsigned N = 32
+    parameter int unsigned NUM_REQ = 32,
+    parameter BRAM_INIT = "",
+    parameter bit ARB_RR = 1'b0
 ) (
     input logic clk,
     input logic rst_n,
-    input logic abort,
+    input logic i_req_enable,
 
-    MemorySubsystemInterface.responder memory_if [N],
+    MemorySubsystemInterface.responder memory_if [NUM_REQ],
 
-    output logic idle
+    output logic o_idle
 );
-    mem_req_t [N-1:0] req;
-    logic [N-1:0] req_ready;
-    logic [N-1:0] req_valid;
-    logic [N-1:0] rsp_ready;
+    // Elaboration-time checks
+    if (ARB_RR != 1'b0) begin : g_arb_rr_check
+        $fatal(1, "ARB_RR=1 (round-robin) is not supported; only fixed priority (0)");
+    end
 
-    word_t bram_rdata [N-1:0];
-    logic [N-1:0] bram_cand;
-    logic [N-1:0] bram_hold;
-    logic [N-1:0] bram_accept;
+    if (!ddr_map_aligned()) begin : g_ddr_align_check
+        $fatal(1, "Every DDR region base and size must be a multiple of WINDOW_BYTES (%0d)",
+            WINDOW_BYTES);
+    end
+
+    if (!map_disjoint()) begin : g_map_overlap_check
+        $fatal(1, "Memory map regions (DMEM, FB0, FB1, TEX) must not overlap");
+    end
+
+    mem_req_t [NUM_REQ-1:0] req;
+    logic [NUM_REQ-1:0] req_valid;
+    logic [NUM_REQ-1:0] rsp_ready;
+    logic [NUM_REQ-1:0] is_idle;
+
+    word_t bram_rdata [NUM_REQ-1:0];
+    logic [NUM_REQ-1:0] bram_cand;
+    logic [NUM_REQ-1:0] bram_take;
+    logic [NUM_REQ-1:0] bram_accept;
     logic bram_busy;
 
-    for (genvar i = 0; i < N; i++) begin : gen_reqs
+    for (genvar i = 0; i < NUM_REQ; i++) begin : gen_reqs
         assign req[i] = memory_if[i].req;
         assign req_valid[i] = memory_if[i].req_valid;
         assign rsp_ready[i] = memory_if[i].rsp_ready;
-        assign memory_if[i].req_ready = req_ready[i] & ~abort;
     end
 
-    for (genvar i = 0; i < N; i++) begin : gen_port_controllers
+    for (genvar i = 0; i < NUM_REQ; i++) begin : gen_port_controllers
         PortController portControllers (
             .clk(clk),
             .rst_n(rst_n),
+            .en(i_req_enable),
             .rsp_ready(rsp_ready[i]),
             .req_valid(req_valid[i]),
             .req(req[i]),
             .bram_accept(bram_accept[i]),
             .bram_rdata(bram_rdata[i]),
             .ddr_accept('b0),
-            // .is_idle(is_idle[i]),
-            .req_ready(req_ready[i]),
+            .req_ready(memory_if[i].req_ready),
             .rsp_valid(memory_if[i].rsp_valid),
             .rsp(memory_if[i].rsp),
             .bram_cand(bram_cand[i]),
-            .bram_hold(bram_hold[i]),
-            .ddr_cand()
+            .bram_take(bram_take[i]),
+            .ddr_cand(),
+            .is_idle(is_idle[i])
         );
     end
 
     BRAMBackend #(
-        .N(N)
+        .NUM_REQ(NUM_REQ),
+        .BRAM_INIT(BRAM_INIT)
     ) bramBackend (
         .clk(clk),
         .rst_n(rst_n),
         .req(req),
         .bram_cand(bram_cand),
-        .bram_hold(bram_hold),
+        .bram_take(bram_take),
         .bram_accept(bram_accept),
         .bram_rdata(bram_rdata),
         .bram_busy(bram_busy)
     );
 
-    assign idle = ~bram_busy;
+    assign o_idle = (&is_idle) & ~bram_busy;
 
 endmodule

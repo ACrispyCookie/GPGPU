@@ -4,6 +4,7 @@ module PortController
 (
     input logic clk,
     input logic rst_n,
+    input logic en,
 
     input logic rsp_ready,
     input logic req_valid,
@@ -18,8 +19,9 @@ module PortController
     output mem_rsp_t rsp,
 
     output logic bram_cand,
-    output logic bram_hold,
-    output logic ddr_cand
+    output logic bram_take,
+    output logic ddr_cand,
+    output logic is_idle
 );
     typedef enum logic [2:0] {
         IDLE,
@@ -30,7 +32,7 @@ module PortController
     } port_ctrl_state_t;
 
     decode_t decoded;
-    assign decoded = decode(req.addr, req.write);
+    assign decoded = decode_access(req.addr, req.write);
 
     port_ctrl_state_t current_state, next_state;
     always_ff @(posedge clk) begin
@@ -41,12 +43,22 @@ module PortController
         end
     end
 
+    // Claim: a presented request in IDLE becomes a candidate while enabled.
+    // req_ready is high only when it is actually taken (claim = issue).
+    logic cand, err;
+    assign cand = req_valid & (current_state == IDLE) & en;
+    assign err = cand & (decoded.target == TGT_ERR);
+    assign bram_cand = cand & (decoded.target == TGT_BRAM);
+    assign ddr_cand = cand & (decoded.target == TGT_DDR);
+    assign req_ready = err | bram_accept | ddr_accept;
+    assign is_idle = current_state == IDLE;
+
     always_comb begin
         next_state = current_state;
 
         case (current_state)
             IDLE: begin
-                if (req_valid && decoded.fault != MEM_OK) begin
+                if (err) begin
                     next_state = IMM_RSP;
                 end else if (bram_accept) begin
                     next_state = req.write ? IMM_RSP : BRAM_RD;
@@ -76,43 +88,40 @@ module PortController
                 end
             end
 
-            IMM_RSP: next_state = IDLE;
+            IMM_RSP: begin
+                if (rsp_ready) begin
+                    next_state = IDLE;
+                end
+            end
+
             default: next_state = IDLE;
         endcase
     end
 
     always_comb begin
-        req_ready = '0;
         rsp_valid = '0;
-        bram_cand = '0;
-        bram_hold = '0;
-        ddr_cand = '0;
+        bram_take = '0;
         rsp.rdata = '0;
-        rsp.fault = MEM_OK;
+        rsp.status = ST_OK;
 
         case (current_state)
-            IDLE: begin
-                req_ready = 'b1;
-                bram_cand = req_valid & decoded.target == TGT_BRAM & decoded.fault == MEM_OK;
-            end
-
             BRAM_RD: begin
-                bram_hold = rsp_ready;
+                bram_take = rsp_ready;
                 rsp.rdata = bram_rdata;
                 rsp_valid = 1'b1;
             end
 
             DDR_RD: begin
-                
+
             end
 
             DDR_WR: begin
-                
+
             end
 
             IMM_RSP: begin
                 rsp_valid = 1'b1;
-                rsp.fault = decoded.fault;
+                rsp.status = decoded.status;
             end
 
             default: begin end

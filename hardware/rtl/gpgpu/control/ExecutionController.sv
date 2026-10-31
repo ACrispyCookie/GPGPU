@@ -37,7 +37,7 @@ module ExecutionController
             end
             CORE_RUNNING: begin
                 if (i_stop || i_core_complete) begin
-                    next_state = i_memory_quiet ? CORE_IDLE : CORE_DRAINING;
+                    next_state = CORE_DRAINING;
                 end else begin
                     next_state = CORE_RUNNING;
                 end

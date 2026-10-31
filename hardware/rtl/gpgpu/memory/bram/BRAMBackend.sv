@@ -2,20 +2,21 @@ module BRAMBackend
     import MemorySubsystemPkg::*;
     import gpu_pkg::*;
 #(
-    parameter N = 32,             // Number of requests 
-    localparam IDX_W = N > 1 ? $clog2(N) : 1
+    parameter int unsigned NUM_REQ = 32, // Number of requests
+    parameter BRAM_INIT = "",
+    localparam IDX_W = NUM_REQ > 1 ? $clog2(NUM_REQ) : 1
 ) (
     input clk,
     input rst_n,
 
     //! Requests and ready
-    input mem_req_t [N-1:0] req,
-    input logic [N-1:0] bram_cand,
-    input logic [N-1:0] bram_hold,
+    input mem_req_t [NUM_REQ-1:0] req,
+    input logic [NUM_REQ-1:0] bram_cand,
+    input logic [NUM_REQ-1:0] bram_take,
 
     //! Responses
-    output logic [N-1:0] bram_accept,
-    output word_t bram_rdata [N-1:0],
+    output logic [NUM_REQ-1:0] bram_accept,
+    output word_t bram_rdata [NUM_REQ-1:0],
     output logic bram_busy
 );
 
@@ -32,7 +33,7 @@ module BRAMBackend
     wire [1:0] available = ~hold;
 
     for (genvar i = 0; i < 2; i++) begin : hold_ports
-        assign hold[i] = busy[i] & ~bram_hold[owners[i]];
+        assign hold[i] = busy[i] & ~bram_take[owners[i]];
     end
 
     assign bram_busy = busy[0] | busy[1];
@@ -40,12 +41,12 @@ module BRAMBackend
     //& =============================================
     //& PICK REQUESTS TO SERVE
     //& =============================================
-    logic [1:0][N-1:0] win_oh; //one-hot
+    logic [1:0][NUM_REQ-1:0] win_oh; //one-hot
     logic [1:0] win_vld;
     logic [1:0][IDX_W-1:0] win_idx;
 
     ArbiterMLowest #(
-        .N(N),
+        .N(NUM_REQ),
         .M(2)
     ) arbiterMLowest (
         .req(bram_cand),
@@ -78,7 +79,8 @@ module BRAMBackend
     ) port_b();
 
     MemoryDualPort #(
-        .DEPTH(DMEM_ENTRIES)
+        .DEPTH(DMEM_ENTRIES),
+        .INIT_FILE(BRAM_INIT)
     ) dataMemory (
         .clk(clk),
         .memory_a(port_a.slave),
@@ -104,13 +106,13 @@ module BRAMBackend
             if (portA_load) begin 
                 busy[0] <= 1'b1; 
                 owners[0] <= portA_idx; 
-            end else if (busy[0] & bram_hold[owners[0]]) 
+            end else if (busy[0] & bram_take[owners[0]]) 
                 busy[0] <= 1'b0;
             
             if (portB_load) begin 
                 busy[1] <= 1'b1;
                 owners[1] <= portB_idx; 
-            end else if (busy[1] & bram_hold[owners[1]]) 
+            end else if (busy[1] & bram_take[owners[1]]) 
                 busy[1] <= 1'b0;
         end
     end
@@ -130,7 +132,7 @@ module BRAMBackend
     //& =============================================
 
     //! Steer the delayed BRAM output back to the specific requester that requested it
-    for (genvar g = 0; g < N; g = g + 1) begin : routing
+    for (genvar g = 0; g < NUM_REQ; g = g + 1) begin : routing
         always_comb begin
             if (busy[0] && owners[0] == g[IDX_W-1:0]) begin
                 bram_rdata[g] = port_a.rdata;
